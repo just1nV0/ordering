@@ -10,54 +10,116 @@ class OrderingScreen extends StatefulWidget {
 class _OrderingScreenState extends State<OrderingScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int cartItemCount = 0;
+  bool isGridView = true; // Track current view mode
+  Set<String> addedItems = {}; // Track which items have been added
 
-  // Sample menu items
   final List<MenuItem> menuItems = [
-    MenuItem(
-      name: 'Classic Burger',
-      price: 12.99,
-      image: 'https://via.placeholder.com/150x150/FF6B6B/FFFFFF?text=Burger',
-    ),
-    MenuItem(
-      name: 'Margherita Pizza',
-      price: 15.99,
-      image: 'https://via.placeholder.com/150x150/4ECDC4/FFFFFF?text=Pizza',
-    ),
-    MenuItem(
-      name: 'Caesar Salad',
-      price: 9.99,
-      image: 'https://via.placeholder.com/150x150/45B7D1/FFFFFF?text=Salad',
-    ),
-    MenuItem(
-      name: 'Chicken Wings',
-      price: 11.99,
-      image: 'https://via.placeholder.com/150x150/F7DC6F/FFFFFF?text=Wings',
-    ),
-    MenuItem(
-      name: 'Fish Tacos',
-      price: 13.99,
-      image: 'https://via.placeholder.com/150x150/BB8FCE/FFFFFF?text=Tacos',
-    ),
-    MenuItem(
-      name: 'Pasta Carbonara',
-      price: 14.99,
-      image: 'https://via.placeholder.com/150x150/F8C471/FFFFFF?text=Pasta',
-    ),
-    MenuItem(
-      name: 'Beef Steak',
-      price: 24.99,
-      image: 'https://via.placeholder.com/150x150/E74C3C/FFFFFF?text=Steak',
-    ),
-    MenuItem(
-      name: 'Chocolate Cake',
-      price: 7.99,
-      image: 'https://via.placeholder.com/150x150/8E44AD/FFFFFF?text=Cake',
-    ),
-  ];
+  MenuItem(
+    name: 'Okra',
+    price: 45.00,
+    image: 'https://via.placeholder.com/150x150/4CAF50/FFFFFF?text=Okra',
+  ),
+  MenuItem(
+    name: 'Sitaw',
+    price: 40.00,
+    image: 'https://via.placeholder.com/150x150/81C784/FFFFFF?text=Sitaw',
+  ),
+  MenuItem(
+    name: 'Patola (Bilog)',
+    price: 50.00,
+    image: 'https://via.placeholder.com/150x150/66BB6A/FFFFFF?text=Patola',
+  ),
+  MenuItem(
+    name: 'Talong',
+    price: 35.00,
+    image: 'https://via.placeholder.com/150x150/9575CD/FFFFFF?text=Talong',
+  ),
+  MenuItem(
+    name: 'Ampalaya',
+    price: 45.00,
+    image: 'https://via.placeholder.com/150x150/388E3C/FFFFFF?text=Ampalaya',
+  ),
+  MenuItem(
+    name: 'Kalabasa',
+    price: 30.00,
+    image: 'https://via.placeholder.com/150x150/FFA726/FFFFFF?text=Kalabasa',
+  ),
+  MenuItem(
+    name: 'Malunggay',
+    price: 20.00,
+    image: 'https://via.placeholder.com/150x150/66BB6A/FFFFFF?text=Malunggay',
+  ),
+  MenuItem(
+    name: 'Kangkong',
+    price: 15.00,
+    image: 'https://via.placeholder.com/150x150/4CAF50/FFFFFF?text=Kangkong',
+  ),
+  MenuItem(
+    name: 'Pechay',
+    price: 25.00,
+    image: 'https://via.placeholder.com/150x150/AED581/FFFFFF?text=Pechay',
+  ),
+  MenuItem(
+    name: 'Upo',
+    price: 30.00,
+    image: 'https://via.placeholder.com/150x150/81C784/FFFFFF?text=Upo',
+  ),
+  MenuItem(
+    name: 'Sayote',
+    price: 28.00,
+    image: 'https://via.placeholder.com/150x150/9CCC65/FFFFFF?text=Sayote',
+  ),
+  MenuItem(
+    name: 'Kamote Tops',
+    price: 18.00,
+    image: 'https://via.placeholder.com/150x150/7CB342/FFFFFF?text=Kamote',
+  ),
+  MenuItem(
+    name: 'Alugbati',
+    price: 22.00,
+    image: 'https://via.placeholder.com/150x150/66BB6A/FFFFFF?text=Alugbati',
+  ),
+  MenuItem(
+    name: 'Labanos',
+    price: 27.00,
+    image: 'https://via.placeholder.com/150x150/EF9A9A/FFFFFF?text=Labanos',
+  ),
+  MenuItem(
+    name: 'Gabi',
+    price: 33.00,
+    image: 'https://via.placeholder.com/150x150/D7CCC8/FFFFFF?text=Gabi',
+  ),
+  MenuItem(
+    name: 'Mustasa',
+    price: 20.00,
+    image: 'https://via.placeholder.com/150x150/8BC34A/FFFFFF?text=Mustasa',
+  ),
+  MenuItem(
+    name: 'Sigarilyas',
+    price: 32.00,
+    image: 'https://via.placeholder.com/150x150/689F38/FFFFFF?text=Sigarilyas',
+  ),
+  MenuItem(
+    name: 'Baguio Beans',
+    price: 38.00,
+    image: 'https://via.placeholder.com/150x150/4CAF50/FFFFFF?text=Beans',
+  ),
+  MenuItem(
+    name: 'Dahon ng Sili',
+    price: 18.00,
+    image: 'https://via.placeholder.com/150x150/388E3C/FFFFFF?text=Sili+Leaves',
+  ),
+  MenuItem(
+    name: 'Kinchay',
+    price: 20.00,
+    image: 'https://via.placeholder.com/150x150/66BB6A/FFFFFF?text=Kinchay',
+  ),
+];
 
   void _addToCart(MenuItem item) {
     setState(() {
       cartItemCount++;
+      addedItems.add(item.name);
     });
     
     ScaffoldMessenger.of(context).showSnackBar(
@@ -67,6 +129,13 @@ class _OrderingScreenState extends State<OrderingScreen> {
         backgroundColor: Colors.green,
       ),
     );
+  }
+
+  void _toggleView() {
+    setState(() {
+      isGridView = !isGridView;
+    });
+    Navigator.pop(context); // Close drawer after toggling
   }
 
   void _viewCart() {
@@ -84,7 +153,6 @@ class _OrderingScreenState extends State<OrderingScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                // Add checkout logic here
               },
               child: const Text('Checkout'),
             ),
@@ -186,6 +254,11 @@ class _OrderingScreenState extends State<OrderingScreen> {
               onTap: () => Navigator.pop(context),
             ),
             ListTile(
+              leading: Icon(isGridView ? Icons.view_list : Icons.grid_view),
+              title: Text(isGridView ? 'List View' : 'Grid View'),
+              onTap: _toggleView,
+            ),
+            ListTile(
               leading: const Icon(Icons.history),
               title: const Text('Order History'),
               onTap: () => Navigator.pop(context),
@@ -232,22 +305,35 @@ class _OrderingScreenState extends State<OrderingScreen> {
         ),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.8,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-            ),
-            itemCount: menuItems.length,
-            itemBuilder: (context, index) {
-              final item = menuItems[index];
-              return MenuItemTile(
-                item: item,
-                onAddToCart: () => _addToCart(item),
-              );
-            },
-          ),
+          child: isGridView
+              ? GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.8,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  itemCount: menuItems.length,
+                  itemBuilder: (context, index) {
+                    final item = menuItems[index];
+                    return MenuItemTile(
+                      item: item,
+                      onAddToCart: () => _addToCart(item),
+                      isAdded: addedItems.contains(item.name),
+                    );
+                  },
+                )
+              : ListView.builder(
+                  itemCount: menuItems.length,
+                  itemBuilder: (context, index) {
+                    final item = menuItems[index];
+                    return MenuItemListTile(
+                      item: item,
+                      onAddToCart: () => _addToCart(item),
+                      isAdded: addedItems.contains(item.name),
+                    );
+                  },
+                ),
         ),
       ),
     );
@@ -257,11 +343,13 @@ class _OrderingScreenState extends State<OrderingScreen> {
 class MenuItemTile extends StatelessWidget {
   final MenuItem item;
   final VoidCallback onAddToCart;
+  final bool isAdded;
 
   const MenuItemTile({
     Key? key,
     required this.item,
     required this.onAddToCart,
+    required this.isAdded,
   }) : super(key: key);
 
   @override
@@ -324,11 +412,11 @@ class MenuItemTile extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.deepOrange,
+                            color: isAdded ? Colors.green : Colors.deepOrange,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Icon(
-                            Icons.add,
+                          child: Icon(
+                            isAdded ? Icons.check : Icons.add,
                             color: Colors.white,
                             size: 20,
                           ),
@@ -341,6 +429,76 @@ class MenuItemTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class MenuItemListTile extends StatelessWidget {
+  final MenuItem item;
+  final VoidCallback onAddToCart;
+  final bool isAdded;
+
+  const MenuItemListTile({
+    Key? key,
+    required this.item,
+    required this.onAddToCart,
+    required this.isAdded,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '\$${item.price.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.deepOrange,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            GestureDetector(
+              onTap: onAddToCart,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isAdded ? Colors.green : Colors.deepOrange,
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                child: Icon(
+                  isAdded ? Icons.check : Icons.add,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
