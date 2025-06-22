@@ -1,8 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:ordering/app/ordering.dart';
-import 'helpers/google_sheets_api.dart'; // Import the Google Sheets API
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'dart:io' show Platform;
 
-void main() {
+import 'app/ordering.dart';
+import 'helpers/google_sheets_api.dart';
+import 'sqlite/insert_sqlite.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize FFI only on desktop platforms
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+  // On mobile platforms (Android/iOS), the default databaseFactory is already set up
+  // No additional initialization needed
+
   runApp(const MyApp());
 }
 
@@ -44,9 +58,6 @@ class _LoadingScreenState extends State<LoadingScreen> {
       setState(() {
         _loadingMessage = 'Connecting to Google Sheets...';
       });
-
-      // Initialize Google Sheets API
-      // Your actual values
       const spreadsheetId = '1uuQtJKa7NngVjHEbV2wsq4BaEOAbKPPeLf2L5NObCcU';
       const serviceAccountJsonAssetPath = 'assets/service_account.json';
       
@@ -65,10 +76,19 @@ class _LoadingScreenState extends State<LoadingScreen> {
 
       if (_itemNamesData != null) {
         print('Successfully loaded ${_itemNamesData!.length} rows from itemnames sheet');
-        // Print first few rows for debugging
         for (int i = 0; i < (_itemNamesData!.length < 5 ? _itemNamesData!.length : 5); i++) {
           print('Row $i: ${_itemNamesData![i]}');
         }
+
+        setState(() {
+          _loadingMessage = 'Saving data to local database...';
+        });
+
+        // INSERT INTO SQLITE HERE
+        final dataInserter = DataInserter();
+        await dataInserter.insertFetchedData(_itemNamesData!);
+
+        print('Data successfully inserted into SQLite database');
       } else {
         print('Failed to load data from itemnames sheet');
       }
@@ -81,9 +101,9 @@ class _LoadingScreenState extends State<LoadingScreen> {
       await Future.delayed(const Duration(milliseconds: 500));
 
       if (mounted) {
-         Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const OrderingScreen()),
-      );
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const OrderingScreen()),
+        );
       }
     } catch (e) {
       print('Error initializing app: $e');
@@ -91,8 +111,8 @@ class _LoadingScreenState extends State<LoadingScreen> {
         _loadingMessage = 'Error loading data. Please try again.';
       });
       
-      // Show error for a moment, then proceed anyway
-      await Future.delayed(const Duration(seconds: 2));
+      // Wait a bit longer to show the error message
+      await Future.delayed(const Duration(seconds: 3));
       
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -116,6 +136,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
             Text(
               _loadingMessage,
               style: Theme.of(context).textTheme.bodyLarge,
+              textAlign: TextAlign.center,
             ),
           ],
         ),
