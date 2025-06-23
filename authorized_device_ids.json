@@ -1,0 +1,9 @@
+{
+  "notes": [
+        "GET HASH = 0 - app_action",
+        "APK BUILD = 1 - app_action"
+  ],
+  "authorizedDeviceIds": [
+  ], 
+  "app_action": 1
+}
