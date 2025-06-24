@@ -2,7 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'create_sqlite.dart';
 
 class DBReader {
-  final DBHelper _dbHelper = DBHelper();
+  final CreateSqlite _createSqlite = CreateSqlite();
 
   /// Reads rows from [tableName] fetching only the columns in [columns].
   ///
@@ -10,15 +10,20 @@ class DBReader {
   /// If the table does not exist, returns an empty list.
   ///
   /// Throws [ArgumentError] if [columns] is empty.
+  /// 
+  /// [orderBy] - Optional parameter for ordering results (e.g., "sold_count DESC")
+  /// [whereClause] - Optional parameter for filtering results (e.g., "category = 'vegetables'")
   Future<List<Map<String, dynamic>>> readTable({
     required String tableName,
     required List<String> columns,
+    String? orderBy,
+    String? whereClause,
   }) async {
     if (columns.isEmpty) {
       throw ArgumentError('Column list must not be empty');
     }
 
-    final db = await _dbHelper.database;
+    final db = await _createSqlite.database;
 
     // Check if table exists
     final tableExists = await _checkIfTableExists(db, tableName);
@@ -26,13 +31,16 @@ class DBReader {
       print('Table "$tableName" does not exist.');
       // Return empty list or throw an exception based on your preference:
       // return [];
-      throw Exception('Table "$tableName" does not exist.');
+      
+      CreateSqlite.createLastUpTable(db);
     }
 
     // Table exists, perform the query
     final List<Map<String, dynamic>> result = await db.query(
       tableName,
       columns: columns,
+      where: whereClause,
+      orderBy: orderBy,
     );
 
     return result;

@@ -1,0 +1,4 @@
+{
+  "itemnames": ["ctr", "itemname", "sold_count", "image_path", "UOM"],
+  "last_up": ["itemnames","item_price"]
+}

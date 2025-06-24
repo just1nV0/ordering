@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../api_helpers/sqlite/insert_sqlite.dart';
+import '../api_helpers/sqlite/read_sqlite.dart';
 
 class OrderingScreen extends StatefulWidget {
   const OrderingScreen({Key? key}) : super(key: key);
@@ -9,117 +11,59 @@ class OrderingScreen extends StatefulWidget {
 
 class _OrderingScreenState extends State<OrderingScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final DBReader _dbReader = DBReader();
+  
   int cartItemCount = 0;
   bool isGridView = true; // Track current view mode
   Set<String> addedItems = {}; // Track which items have been added
+  List<MenuItem> menuItems = []; // Will be populated from database
+  bool isLoading = true;
 
-  final List<MenuItem> menuItems = [
-  MenuItem(
-    name: 'Okra',
-    price: 45.00,
-    image: 'https://via.placeholder.com/150x150/4CAF50/FFFFFF?text=Okra',
-  ),
-  MenuItem(
-    name: 'Sitaw',
-    price: 40.00,
-    image: 'https://via.placeholder.com/150x150/81C784/FFFFFF?text=Sitaw',
-  ),
-  MenuItem(
-    name: 'Patola (Bilog)',
-    price: 50.00,
-    image: 'https://via.placeholder.com/150x150/66BB6A/FFFFFF?text=Patola',
-  ),
-  MenuItem(
-    name: 'Talong',
-    price: 35.00,
-    image: 'https://via.placeholder.com/150x150/9575CD/FFFFFF?text=Talong',
-  ),
-  MenuItem(
-    name: 'Ampalaya',
-    price: 45.00,
-    image: 'https://via.placeholder.com/150x150/388E3C/FFFFFF?text=Ampalaya',
-  ),
-  MenuItem(
-    name: 'Kalabasa',
-    price: 30.00,
-    image: 'https://via.placeholder.com/150x150/FFA726/FFFFFF?text=Kalabasa',
-  ),
-  MenuItem(
-    name: 'Malunggay',
-    price: 20.00,
-    image: 'https://via.placeholder.com/150x150/66BB6A/FFFFFF?text=Malunggay',
-  ),
-  MenuItem(
-    name: 'Kangkong',
-    price: 15.00,
-    image: 'https://via.placeholder.com/150x150/4CAF50/FFFFFF?text=Kangkong',
-  ),
-  MenuItem(
-    name: 'Pechay',
-    price: 25.00,
-    image: 'https://via.placeholder.com/150x150/AED581/FFFFFF?text=Pechay',
-  ),
-  MenuItem(
-    name: 'Upo',
-    price: 30.00,
-    image: 'https://via.placeholder.com/150x150/81C784/FFFFFF?text=Upo',
-  ),
-  MenuItem(
-    name: 'Sayote',
-    price: 28.00,
-    image: 'https://via.placeholder.com/150x150/9CCC65/FFFFFF?text=Sayote',
-  ),
-  MenuItem(
-    name: 'Kamote Tops',
-    price: 18.00,
-    image: 'https://via.placeholder.com/150x150/7CB342/FFFFFF?text=Kamote',
-  ),
-  MenuItem(
-    name: 'Alugbati',
-    price: 22.00,
-    image: 'https://via.placeholder.com/150x150/66BB6A/FFFFFF?text=Alugbati',
-  ),
-  MenuItem(
-    name: 'Labanos',
-    price: 27.00,
-    image: 'https://via.placeholder.com/150x150/EF9A9A/FFFFFF?text=Labanos',
-  ),
-  MenuItem(
-    name: 'Gabi',
-    price: 33.00,
-    image: 'https://via.placeholder.com/150x150/D7CCC8/FFFFFF?text=Gabi',
-  ),
-  MenuItem(
-    name: 'Mustasa',
-    price: 20.00,
-    image: 'https://via.placeholder.com/150x150/8BC34A/FFFFFF?text=Mustasa',
-  ),
-  MenuItem(
-    name: 'Sigarilyas',
-    price: 32.00,
-    image: 'https://via.placeholder.com/150x150/689F38/FFFFFF?text=Sigarilyas',
-  ),
-  MenuItem(
-    name: 'Baguio Beans',
-    price: 38.00,
-    image: 'https://via.placeholder.com/150x150/4CAF50/FFFFFF?text=Beans',
-  ),
-  MenuItem(
-    name: 'Dahon ng Sili',
-    price: 18.00,
-    image: 'https://via.placeholder.com/150x150/388E3C/FFFFFF?text=Sili+Leaves',
-  ),
-  MenuItem(
-    name: 'Kinchay',
-    price: 20.00,
-    image: 'https://via.placeholder.com/150x150/66BB6A/FFFFFF?text=Kinchay',
-  ),
-];
+  @override
+  void initState() {
+    super.initState();
+    _loadMenuItems();
+  }
+
+  Future<void> _loadMenuItems() async {
+    try {
+      final List<Map<String, dynamic>> items = await _dbReader.readTable(
+        tableName: 'itemnames',
+        columns: ['ctr', 'itemname', 'uom'],
+        orderBy: 'sold_count DESC',
+      );
+
+      setState(() {
+        menuItems = items.map((item) => MenuItem(
+          id: item['ctr']?.toString() ?? '',
+          name: item['itemname']?.toString() ?? 'Unknown Item',
+          price: 0.00, // Temporary price as requested
+          uom: item['uom']?.toString() ?? '',
+          image: 'https://via.placeholder.com/150x150/4CAF50/FFFFFF?text=${Uri.encodeComponent(item['itemname']?.toString() ?? 'Item')}',
+        )).toList();
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading menu items: $e');
+      setState(() {
+        isLoading = false;
+      });
+      // Show error message to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading menu items: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   void _addToCart(MenuItem item) {
     setState(() {
       cartItemCount++;
-      addedItems.add(item.name);
+      addedItems.add(item.id);
     });
     
     ScaffoldMessenger.of(context).showSnackBar(
@@ -259,6 +203,17 @@ class _OrderingScreenState extends State<OrderingScreen> {
               onTap: _toggleView,
             ),
             ListTile(
+              leading: const Icon(Icons.refresh),
+              title: const Text('Refresh Menu'),
+              onTap: () {
+                Navigator.pop(context);
+                setState(() {
+                  isLoading = true;
+                });
+                _loadMenuItems();
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.history),
               title: const Text('Order History'),
               onTap: () => Navigator.pop(context),
@@ -305,35 +260,51 @@ class _OrderingScreenState extends State<OrderingScreen> {
         ),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: isGridView
-              ? GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.8,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
+          child: isLoading
+              ? const Center(
+                  child: CircularProgressIndicator(
+                    color: Colors.deepOrange,
                   ),
-                  itemCount: menuItems.length,
-                  itemBuilder: (context, index) {
-                    final item = menuItems[index];
-                    return MenuItemTile(
-                      item: item,
-                      onAddToCart: () => _addToCart(item),
-                      isAdded: addedItems.contains(item.name),
-                    );
-                  },
                 )
-              : ListView.builder(
-                  itemCount: menuItems.length,
-                  itemBuilder: (context, index) {
-                    final item = menuItems[index];
-                    return MenuItemListTile(
-                      item: item,
-                      onAddToCart: () => _addToCart(item),
-                      isAdded: addedItems.contains(item.name),
-                    );
-                  },
-                ),
+              : menuItems.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No menu items available',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    )
+                  : isGridView
+                      ? GridView.builder(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 0.8,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                          ),
+                          itemCount: menuItems.length,
+                          itemBuilder: (context, index) {
+                            final item = menuItems[index];
+                            return MenuItemTile(
+                              item: item,
+                              onAddToCart: () => _addToCart(item),
+                              isAdded: addedItems.contains(item.id),
+                            );
+                          },
+                        )
+                      : ListView.builder(
+                          itemCount: menuItems.length,
+                          itemBuilder: (context, index) {
+                            final item = menuItems[index];
+                            return MenuItemListTile(
+                              item: item,
+                              onAddToCart: () => _addToCart(item),
+                              isAdded: addedItems.contains(item.id),
+                            );
+                          },
+                        ),
         ),
       ),
     );
@@ -371,7 +342,7 @@ class MenuItemTile extends StatelessWidget {
               child: Container(
                 color: Colors.grey[200],
                 child: const Icon(
-                  Icons.fastfood,
+                  Icons.restaurant,
                   size: 60,
                   color: Colors.grey,
                 ),
@@ -388,21 +359,29 @@ class MenuItemTile extends StatelessWidget {
                   Text(
                     item.name,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (item.uom.isNotEmpty)
+                    Text(
+                      'UOM: ${item.uom}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
                   const Spacer(),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '\$${item.price.toStringAsFixed(2)}',
+                        '₱${item.price.toStringAsFixed(2)}',
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: Colors.deepOrange,
                         ),
@@ -471,8 +450,17 @@ class MenuItemListTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
+                  if (item.uom.isNotEmpty)
+                    Text(
+                      'UOM: ${item.uom}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  const SizedBox(height: 4),
                   Text(
-                    '\$${item.price.toStringAsFixed(2)}',
+                    '₱${item.price.toStringAsFixed(2)}',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -505,13 +493,17 @@ class MenuItemListTile extends StatelessWidget {
 }
 
 class MenuItem {
+  final String id;
   final String name;
   final double price;
+  final String uom;
   final String image;
 
   MenuItem({
+    required this.id,
     required this.name,
     required this.price,
+    required this.uom,
     required this.image,
   });
 }

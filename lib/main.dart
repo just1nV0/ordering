@@ -3,8 +3,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io' show Platform;
 
 import 'app/ordering.dart';
-import 'helpers/google_sheets_api.dart';
-import 'sqlite/insert_sqlite.dart';
+import 'api_helpers/sqlite/insert_sqlite.dart';
+import 'api_helpers/google_sheets/crud/read_sheets.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,7 +43,7 @@ class LoadingScreen extends StatefulWidget {
 }
 
 class _LoadingScreenState extends State<LoadingScreen> {
-  GoogleSheetsApi? _sheetsApi;
+  final SheetsReader _sheetsReader = SheetsReader();
   List<List<Object?>>? _itemNamesData;
   String _loadingMessage = 'Initializing...';
 
@@ -58,21 +58,25 @@ class _LoadingScreenState extends State<LoadingScreen> {
       setState(() {
         _loadingMessage = 'Connecting to Google Sheets...';
       });
+      
       const spreadsheetId = '1uuQtJKa7NngVjHEbV2wsq4BaEOAbKPPeLf2L5NObCcU';
       const serviceAccountJsonAssetPath = 'assets/service_account.json';
       
-      _sheetsApi = await GoogleSheetsApi.create(
+      
+      await _sheetsReader.initialize(
         spreadsheetId: spreadsheetId,
         serviceAccountJsonAssetPath: serviceAccountJsonAssetPath,
       );
 
+      final lastUpBool = _sheetsReader.syncLastUpData();
+      print(!await lastUpBool);
+if(!await lastUpBool){
       setState(() {
         _loadingMessage = 'Loading item names...';
       });
 
       // Fetch data from the "itemnames" sheet
-      // Adjust the range as needed (e.g., 'itemnames!A:Z' for all columns)
-      _itemNamesData = await _sheetsApi!.fetchSheetData('itemnames!A:Z');
+      _itemNamesData = await _sheetsReader.readItemNames();
 
       if (_itemNamesData != null) {
         print('Successfully loaded ${_itemNamesData!.length} rows from itemnames sheet');
@@ -96,7 +100,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
       setState(() {
         _loadingMessage = 'Finalizing...';
       });
-
+    }
       // Small delay to show the final message
       await Future.delayed(const Duration(milliseconds: 500));
 

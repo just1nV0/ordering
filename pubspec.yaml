@@ -26,3 +26,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/service_account.json
+    - assets/sqlite_schema/columns.json
