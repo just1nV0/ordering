@@ -42,11 +42,7 @@ class SheetsReader {
     return await readSheetData('itemnames!A:Z');
   }
 
-  /// Reads the "last_up" sheet and compares with SQLite database
-  /// Returns true if all values are equal, false if updates were made
-  /// Reads the "last_up" sheet and compares with SQLite database
-/// Returns true if all values are equal, false if updates were made
-Future<bool> syncLastUpData() async {
+Future<Map<String, dynamic>> syncLastUpData() async {
   try {
     // Read column names from JSON
     final jsonString = await rootBundle.loadString('assets/sqlite_schema/columns.json');
@@ -71,7 +67,7 @@ Future<bool> syncLastUpData() async {
     final sheetData = await readSheetData('last_up!A:Z');
     if (sheetData == null || sheetData.isEmpty) {
       print('No data found in last_up sheet');
-      return true; // Consider empty sheet as "up to date"
+      return {'allEqual': true, 'mismatchedColumns': <String>[]}; // Consider empty sheet as "up to date"
     }
 
     // Assume first row contains headers, subsequent rows contain data
@@ -100,6 +96,7 @@ Future<bool> syncLastUpData() async {
     );
 
     bool allEqual = true;
+    Set<String> allMismatchedColumns = <String>{}; // Track all mismatched columns
     
     // Compare each row from sheets with SQLite data
     for (int i = 0; i < dataRows.length; i++) {
@@ -121,73 +118,79 @@ Future<bool> syncLastUpData() async {
       final keyValue = sheetRowData[keyColumn];
       
       if (keyValue == null || keyValue.isEmpty) continue;
-print("justinkim $sqliteData");
+      print("justinkim $sqliteData");
+      
       // Find matching SQLite row
       final matchingSqliteRows = sqliteData.where((row) => 
         row[keyColumn]?.toString() == keyValue
       ).toList();
 
-      // Replace the section in syncLastUpData() method where you handle inserting/updating:
+      if (matchingSqliteRows.isEmpty) {
+        // No matching row in SQLite, need to insert new row
+        print('No existing row found with $keyColumn = $keyValue, will insert new row');
+        
+        // First try to update (which will affect 0 rows if it doesn't exist)
+        final rowsAffected = await _dbUpdater.updateTable(
+          tableName: 'last_up',
+          whereClause: '$keyColumn = ?',
+          whereArgs: [keyValue],
+          values: sheetRowData,
+        );
+        
+        // If no rows were affected, the row doesn't exist, so insert it directly
+        if (rowsAffected == 0) {
+          await db.insert(
+            'last_up',
+            sheetRowData.map((key, value) => MapEntry(key, value)),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+          print('Inserted new row with $keyColumn = $keyValue');
+        }
+        
+        allEqual = false;
+        allMismatchedColumns.addAll(columns); // Add all columns as mismatched for new rows
+        continue;
+      }
 
-if (matchingSqliteRows.isEmpty) {
-  // No matching row in SQLite, need to insert new row
-  // Since DBUpdater doesn't have insert method, we'll use upsert approach
-  print('No existing row found with $keyColumn = $keyValue, will insert new row');
-  
-  // First try to update (which will affect 0 rows if it doesn't exist)
-  final rowsAffected = await _dbUpdater.updateTable(
-    tableName: 'last_up',
-    whereClause: '$keyColumn = ?',
-    whereArgs: [keyValue],
-    values: sheetRowData,
-  );
-  
-  // If no rows were affected, the row doesn't exist, so insert it directly
-  if (rowsAffected == 0) {
-    await db.insert(
-      'last_up',
-      sheetRowData.map((key, value) => MapEntry(key, value)),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-    print('Inserted new row with $keyColumn = $keyValue');
-  }
-  
-  allEqual = false;
-  continue;
-}
+      final sqliteRow = matchingSqliteRows.first;
 
-final sqliteRow = matchingSqliteRows.first;
+      // Compare each column
+      Map<String, dynamic> updatedValues = {};
+      List<String> mismatchedColumns = []; 
+      for (String column in columns) {
+        final sheetValue = sheetRowData[column] ?? '';
+        final sqliteValue = sqliteRow[column]?.toString() ?? '';
 
-// Compare each column
-Map<String, dynamic> updatedValues = {};
-for (String column in columns) {
-  final sheetValue = sheetRowData[column] ?? '';
-  final sqliteValue = sqliteRow[column]?.toString() ?? '';
-  
-  if (sheetValue != sqliteValue) {
-    updatedValues[column] = sheetValue;
-    allEqual = false;
-  }
-}
+        if (sheetValue != sqliteValue) {
+          updatedValues[column] = sheetValue;
+          mismatchedColumns.add(column);
+          allMismatchedColumns.add(column); // Add to overall set
+          allEqual = false;
+        }
+      }
 
-// If there are differences, update the SQLite row using DBUpdater
-if (updatedValues.isNotEmpty) {
-  await _dbUpdater.updateTable(
-    tableName: 'last_up',
-    whereClause: '$keyColumn = ?',
-    whereArgs: [keyValue],
-    values: updatedValues,
-  );
-  
-  print('Updated row with $keyColumn = $keyValue: $updatedValues');
-}
+      // If there are differences, update the SQLite row using DBUpdater
+      if (updatedValues.isNotEmpty) {
+        await _dbUpdater.updateTable(
+          tableName: 'last_up',
+          whereClause: '$keyColumn = ?',
+          whereArgs: [keyValue],
+          values: updatedValues,
+        );
+
+        print('Updated row with $keyColumn = $keyValue: $updatedValues');
+        print('Mismatched columns: $mismatchedColumns');
+      }
     }
 
-    return allEqual;
+    return {
+      'allEqual': allEqual,
+      'mismatchedColumns': allMismatchedColumns.toList()
+    };
     
   } catch (e) {
     print('Error in syncLastUpData: $e');
-    return false;
+    return {'allEqual': false, 'mismatchedColumns': <String>[]};
   }
 }
 
