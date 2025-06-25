@@ -127,43 +127,60 @@ print("justinkim $sqliteData");
         row[keyColumn]?.toString() == keyValue
       ).toList();
 
-      if (matchingSqliteRows.isEmpty) {
-        // No matching row in SQLite, insert new row
-        print('Inserting new row with $keyColumn = $keyValue');
-        await db.insert(
-          'last_up',
-          sheetRowData.map((key, value) => MapEntry(key, value)),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-        allEqual = false;
-        continue;
-      }
+      // Replace the section in syncLastUpData() method where you handle inserting/updating:
 
-      final sqliteRow = matchingSqliteRows.first;
-      
-      // Compare each column
-      Map<String, dynamic> updatedValues = {};
-      for (String column in columns) {
-        final sheetValue = sheetRowData[column] ?? '';
-        final sqliteValue = sqliteRow[column]?.toString() ?? '';
-        
-        if (sheetValue != sqliteValue) {
-          updatedValues[column] = sheetValue;
-          allEqual = false;
-        }
-      }
+if (matchingSqliteRows.isEmpty) {
+  // No matching row in SQLite, need to insert new row
+  // Since DBUpdater doesn't have insert method, we'll use upsert approach
+  print('No existing row found with $keyColumn = $keyValue, will insert new row');
+  
+  // First try to update (which will affect 0 rows if it doesn't exist)
+  final rowsAffected = await _dbUpdater.updateTable(
+    tableName: 'last_up',
+    whereClause: '$keyColumn = ?',
+    whereArgs: [keyValue],
+    values: sheetRowData,
+  );
+  
+  // If no rows were affected, the row doesn't exist, so insert it directly
+  if (rowsAffected == 0) {
+    await db.insert(
+      'last_up',
+      sheetRowData.map((key, value) => MapEntry(key, value)),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    print('Inserted new row with $keyColumn = $keyValue');
+  }
+  
+  allEqual = false;
+  continue;
+}
 
-      // If there are differences, update the SQLite row
-      if (updatedValues.isNotEmpty) {
-        await _dbUpdater.updateTable(
-          tableName: 'last_up',
-          whereClause: '$keyColumn = ?',
-          whereArgs: [keyValue],
-          values: updatedValues,
-        );
-        
-        print('Updated row with $keyColumn = $keyValue: $updatedValues');
-      }
+final sqliteRow = matchingSqliteRows.first;
+
+// Compare each column
+Map<String, dynamic> updatedValues = {};
+for (String column in columns) {
+  final sheetValue = sheetRowData[column] ?? '';
+  final sqliteValue = sqliteRow[column]?.toString() ?? '';
+  
+  if (sheetValue != sqliteValue) {
+    updatedValues[column] = sheetValue;
+    allEqual = false;
+  }
+}
+
+// If there are differences, update the SQLite row using DBUpdater
+if (updatedValues.isNotEmpty) {
+  await _dbUpdater.updateTable(
+    tableName: 'last_up',
+    whereClause: '$keyColumn = ?',
+    whereArgs: [keyValue],
+    values: updatedValues,
+  );
+  
+  print('Updated row with $keyColumn = $keyValue: $updatedValues');
+}
     }
 
     return allEqual;
