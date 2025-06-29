@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter/material.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io' show Platform;
@@ -15,8 +17,6 @@ Future<void> main() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
-  // On mobile platforms (Android/iOS), the default databaseFactory is already set up
-  // No additional initialization needed
 
   runApp(const MyApp());
 }
@@ -28,6 +28,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Ordering App',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
@@ -47,6 +48,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
   final SheetsReader _sheetsReader = SheetsReader();
   final AudioPlayer _audioPlayer = AudioPlayer();
   List<List<Object?>>? _itemNamesData;
+  List<List<Object?>>? _pricesData;
   String _loadingMessage = 'Initializing...';
 
   @override
@@ -63,13 +65,9 @@ class _LoadingScreenState extends State<LoadingScreen> {
 
   Future<void> _playLoadingAudio() async {
     try {
-      // Add a small delay to ensure the platform is fully initialized
       await Future.delayed(const Duration(milliseconds: 100));
-      
-      // Alternative approach: Set player mode first
       await _audioPlayer.setPlayerMode(PlayerMode.mediaPlayer);
       
-      // Set the audio context for Android
       if (Platform.isAndroid) {
         await _audioPlayer.setAudioContext(AudioContext(
           android: AudioContextAndroid(
@@ -82,20 +80,10 @@ class _LoadingScreenState extends State<LoadingScreen> {
         ));
       }
       
-      // Try to play the audio
       await _audioPlayer.play(AssetSource('audio/gulay-gulay_kim.mp3'));
       print('Audio playback started successfully');
     } catch (e) {
       print('Error playing audio: $e');
-      // Try alternative method with file path
-      try {
-        await _audioPlayer.play(AssetSource('audio/gulay-gulay_kim.mp3'), 
-          mode: PlayerMode.mediaPlayer);
-        print('Audio playback started with alternative method');
-      } catch (e2) {
-        print('Alternative audio method also failed: $e2');
-        // Continue with the loading process even if audio fails
-      }
     }
   }
 
@@ -105,10 +93,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
         _loadingMessage = 'Initializing...';
       });
       
-      // Small delay to ensure widget is fully mounted before playing audio
       await Future.delayed(const Duration(milliseconds: 200));
-      
-      // Start playing audio after initialization delay
       _playLoadingAudio();
       
       setState(() {
@@ -128,34 +113,78 @@ class _LoadingScreenState extends State<LoadingScreen> {
       final bool allEqual = syncResult['allEqual'] ?? false;
       final List<String> mismatchedColumns = List<String>.from(syncResult['mismatchedColumns'] ?? []);
       
-      print('Sync completed. All equal: $allEqual');
+      print('Sync completed. All equal: $allEqual $syncResult');
       print('Mismatched columns: $mismatchedColumns');
       
       if (!allEqual) {
         setState(() {
-          _loadingMessage = 'Loading item names...';
+          _loadingMessage = 'Loading updated data...';
         });
 
-        // Fetch data from the "itemnames" sheet
-        _itemNamesData = await _sheetsReader.readItemNames();
+        final dataInserter = DataInserter();
 
-        if (_itemNamesData != null) {
-          print('Successfully loaded ${_itemNamesData!.length} rows from itemnames sheet');
-          for (int i = 0; i < (_itemNamesData!.length < 5 ? _itemNamesData!.length : 5); i++) {
-            print('Row $i: ${_itemNamesData![i]}');
-          }
-
+        // Handle itemnames data update
+        if (mismatchedColumns.contains("itemnames")) {
           setState(() {
-            _loadingMessage = 'Saving data to local database...';
+            _loadingMessage = 'Loading item names...';
           });
 
-          // INSERT INTO SQLITE HERE
-          final dataInserter = DataInserter();
-          await dataInserter.insertDataToTable('itemnames', _itemNamesData!);
+          _itemNamesData = await _sheetsReader.readSheetData(
+            sheetName: 'itemnames',
+            range: 'A:Z',
+          );
 
-          print('Data successfully inserted into SQLite database');
-        } else {
-          print('Failed to load data from itemnames sheet');
+          if (_itemNamesData != null) {
+            print('Successfully loaded ${_itemNamesData!.length} rows from itemnames sheet');
+            
+            setState(() {
+              _loadingMessage = 'Analyzing item names changes...';
+            });
+
+            // Get statistics before sync
+            final stats = await dataInserter.getTableSyncStats('itemnames', _itemNamesData!);
+            print('Item names sync analysis: $stats');
+            
+            setState(() {
+              _loadingMessage = 'Syncing item names to database...';
+            });
+
+            // Use the new intelligent insert/update method
+            final result = await dataInserter.insertOrUpdateDataToTable('itemnames', _itemNamesData!);
+            print('Item names sync completed: $result');
+          }
+        }
+
+        // Handle item_price data update
+        if (mismatchedColumns.contains("item_price")) {
+          setState(() {
+            _loadingMessage = 'Loading item prices...';
+          });
+
+          _pricesData = await _sheetsReader.readSheetData(
+            sheetName: 'item_price',
+            range: 'A:C', // Example: only columns A to D
+          );
+
+          if (_pricesData != null) {
+            print('Successfully loaded ${_pricesData} rows from item_price sheet');
+            
+            setState(() {
+              _loadingMessage = 'Analyzing price changes...';
+            });
+
+            // Get statistics before sync
+            final stats = await dataInserter.getTableSyncStats('item_price', _pricesData!);
+            print('Item price sync analysis: $stats');
+            
+            setState(() {
+              _loadingMessage = 'Syncing prices to database...';
+            });
+
+            // Use the new intelligent insert/update method
+            final result = await dataInserter.insertOrUpdateDataToTable('item_price', _pricesData!);
+            print('Item price sync completed: $result');
+          }
         }
 
         setState(() {
@@ -165,7 +194,6 @@ class _LoadingScreenState extends State<LoadingScreen> {
         print('Data is up to date, skipping fetch and insert operations');
       }
       
-      // Extended delay to ensure audio completes and give time for user to hear it
       await Future.delayed(const Duration(seconds: 3));
 
       if (mounted) {
@@ -179,7 +207,6 @@ class _LoadingScreenState extends State<LoadingScreen> {
         _loadingMessage = 'Error loading data. Please try again.';
       });
       
-      // Wait a bit longer to show the error message and let audio finish
       await Future.delayed(const Duration(seconds: 3));
       
       if (mounted) {
@@ -199,14 +226,13 @@ class _LoadingScreenState extends State<LoadingScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Display the image while loading
             ClipRRect(
-              borderRadius: BorderRadius.circular(24), // Adjust the value for more or less curve
+              borderRadius: BorderRadius.circular(24),
               child: Image.asset(
                 'assets/images/aiyah.png',
                 width: 200,
                 height: 200,
-                fit: BoxFit.cover, // Ensures the image covers the box with possible cropping
+                fit: BoxFit.cover,
               ),
             ),
             const SizedBox(height: 20),

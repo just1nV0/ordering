@@ -1,4 +1,24 @@
 {
   "itemnames": ["ctr", "itemname", "sold_count", "image_path", "UOM"],
-  "last_up": ["itemnames","item_price"]
+  "last_up": ["itemnames","item_price"],
+  "item_price": ["ctr","prev_price", "curr_price"],
+
+  
+  "itemnames_schem": {
+    "ctr": "INTEGER PRIMARY KEY",
+    "itemname": "TEXT NOT NULL",
+    "sold_count": "INTEGER DEFAULT 0",
+    "image_path": "TEXT",
+    "UOM": "TEXT"
+  },
+  "last_up_schem": {
+    "itemnames": "TEXT",
+    "item_price": "TEXT"
+  },
+  "item_price_schem":{
+    "ctr": "INTEGER PRIMARY KEY",
+    "prev_price": "TEXT",
+    "curr_price": "TEXT"
+  }
+
 }

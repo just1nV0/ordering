@@ -24,23 +24,37 @@ class CreateSqlite {
     );
   }
 
-  Future<void> _createDB(Database db, int version) async {
-    // Read column names from the JSON file in the same directory
-    final jsonString = await rootBundle.loadString('assets/sqlite_schema/columns.json');
-    final data = jsonDecode(jsonString);
-    final List<dynamic> columns = data['itemnames'];
+ Future<void> _createDB(Database db, int version) async {
+  final jsonString =
+      await rootBundle.loadString('assets/sqlite_schema/columns.json');
+  final Map<String, dynamic> tables = jsonDecode(jsonString);
 
-    // Construct column definitions (defaulting all to TEXT)
-    String columnDefinitions = columns.map((col) => '$col TEXT').join(', ');
-    String createQuery = 'CREATE TABLE IF NOT EXISTS itemnames ($columnDefinitions)';
+  for (final tableName in tables.keys) {
+    if (!tableName.endsWith('_schem')) continue;
 
-    await db.execute(createQuery);
+    final realTableName = tableName.replaceAll('_schem', '');
+    final Map<String, dynamic> columns =
+        Map<String, dynamic>.from(tables[tableName]);
+
+    final columnDefs = columns.entries
+        .map((entry) => '${entry.key} ${entry.value}')
+        .join(', ');
+
+    final createTableSQL = '''
+      CREATE TABLE IF NOT EXISTS $realTableName (
+        $columnDefs
+      );
+    ''';
+
+    await db.execute(createTableSQL);
   }
+}
+
 
   static Future<void> createLastUpTable(Database db) async {
   final jsonString = await rootBundle.loadString('assets/sqlite_schema/columns.json');
   final data = jsonDecode(jsonString);
-  final List columns = data['last_up'];
+  final List columns = data['last_up_schem'];
   String columnDefinitions = columns.map((col) => '$col TEXT').join(', ');
   String createQuery = 'CREATE TABLE IF NOT EXISTS last_up ($columnDefinitions)';
   await db.execute(createQuery);

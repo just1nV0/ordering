@@ -12,7 +12,7 @@ class OrderingScreen extends StatefulWidget {
 class _OrderingScreenState extends State<OrderingScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final DBReader _dbReader = DBReader();
-  
+
   int cartItemCount = 0;
   bool isGridView = true; // Track current view mode
   Set<String> addedItems = {}; // Track which items have been added
@@ -29,18 +29,28 @@ class _OrderingScreenState extends State<OrderingScreen> {
     try {
       final List<Map<String, dynamic>> items = await _dbReader.readTable(
         tableName: 'itemnames',
-        columns: ['ctr', 'itemname', 'uom'],
+        columns: ['ctr', 'itemname', 'uom', 'sold_count'],
         orderBy: 'sold_count DESC',
       );
 
+      print("item.values");
+      for (var item in items) {
+        print(item.values);
+      }
+
       setState(() {
-        menuItems = items.map((item) => MenuItem(
-          id: item['ctr']?.toString() ?? '',
-          name: item['itemname']?.toString() ?? 'Unknown Item',
-          price: 0.00, // Temporary price as requested
-          uom: item['uom']?.toString() ?? '',
-          image: 'https://via.placeholder.com/150x150/4CAF50/FFFFFF?text=${Uri.encodeComponent(item['itemname']?.toString() ?? 'Item')}',
-        )).toList();
+        menuItems = items
+            .map(
+              (item) => MenuItem(
+                id: item['ctr']?.toString() ?? '',
+                name: item['itemname']?.toString() ?? 'Unknown Item',
+                price: 0.00,
+                uom: item['uom']?.toString() ?? '',
+                image:
+                    'https://via.placeholder.com/150x150/4CAF50/FFFFFF?text=${Uri.encodeComponent(item['itemname']?.toString() ?? 'Item')}',
+              ),
+            )
+            .toList();
         isLoading = false;
       });
     } catch (e) {
@@ -65,7 +75,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
       cartItemCount++;
       addedItems.add(item.id);
     });
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${item.name} added to cart'),
@@ -142,10 +152,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
                     ),
                     child: Text(
                       '$cartItemCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -159,9 +166,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
           padding: EdgeInsets.zero,
           children: [
             const DrawerHeader(
-              decoration: BoxDecoration(
-                color: Colors.deepOrange,
-              ),
+              decoration: BoxDecoration(color: Colors.deepOrange),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -252,59 +257,51 @@ class _OrderingScreenState extends State<OrderingScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFF5F5F5),
-              Color(0xFFE8E8E8),
-            ],
+            colors: [Color(0xFFF5F5F5), Color(0xFFE8E8E8)],
           ),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: isLoading
               ? const Center(
-                  child: CircularProgressIndicator(
-                    color: Colors.deepOrange,
-                  ),
+                  child: CircularProgressIndicator(color: Colors.deepOrange),
                 )
               : menuItems.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No menu items available',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    )
-                  : isGridView
-                      ? GridView.builder(
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.8,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                          ),
-                          itemCount: menuItems.length,
-                          itemBuilder: (context, index) {
-                            final item = menuItems[index];
-                            return MenuItemTile(
-                              item: item,
-                              onAddToCart: () => _addToCart(item),
-                              isAdded: addedItems.contains(item.id),
-                            );
-                          },
-                        )
-                      : ListView.builder(
-                          itemCount: menuItems.length,
-                          itemBuilder: (context, index) {
-                            final item = menuItems[index];
-                            return MenuItemListTile(
-                              item: item,
-                              onAddToCart: () => _addToCart(item),
-                              isAdded: addedItems.contains(item.id),
-                            );
-                          },
-                        ),
+              ? const Center(
+                  child: Text(
+                    'No menu items available',
+                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                  ),
+                )
+              : isGridView
+              ? GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.8,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  itemCount: menuItems.length,
+                  itemBuilder: (context, index) {
+                    final item = menuItems[index];
+                    return MenuItemTile(
+                      item: item,
+                      onAddToCart: () => _addToCart(item),
+                      isAdded: addedItems.contains(item.id),
+                    );
+                  },
+                )
+              : ListView.builder(
+                  itemCount: menuItems.length,
+                  itemBuilder: (context, index) {
+                    final item = menuItems[index];
+                    return MenuItemListTile(
+                      item: item,
+                      onAddToCart: () => _addToCart(item),
+                      isAdded: addedItems.contains(item.id),
+                    );
+                  },
+                ),
         ),
       ),
     );
@@ -327,9 +324,7 @@ class MenuItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -369,10 +364,7 @@ class MenuItemTile extends StatelessWidget {
                   if (item.uom.isNotEmpty)
                     Text(
                       'UOM: ${item.uom}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                      ),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   const Spacer(),
                   Row(
@@ -430,9 +422,7 @@ class MenuItemListTile extends StatelessWidget {
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Row(
@@ -453,10 +443,7 @@ class MenuItemListTile extends StatelessWidget {
                   if (item.uom.isNotEmpty)
                     Text(
                       'UOM: ${item.uom}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                      ),
+                      style: const TextStyle(fontSize: 14, color: Colors.grey),
                     ),
                   const SizedBox(height: 4),
                   Text(
