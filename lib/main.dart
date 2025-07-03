@@ -163,7 +163,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
 
           _pricesData = await _sheetsReader.readSheetData(
             sheetName: 'item_price',
-            range: 'A:C', // Example: only columns A to D
+            range: 'A:C', 
           );
 
           if (_pricesData != null) {
@@ -172,16 +172,12 @@ class _LoadingScreenState extends State<LoadingScreen> {
             setState(() {
               _loadingMessage = 'Analyzing price changes...';
             });
-
-            // Get statistics before sync
             final stats = await dataInserter.getTableSyncStats('item_price', _pricesData!);
             print('Item price sync analysis: $stats');
             
             setState(() {
               _loadingMessage = 'Syncing prices to database...';
             });
-
-            // Use the new intelligent insert/update method
             final result = await dataInserter.insertOrUpdateDataToTable('item_price', _pricesData!);
             print('Item price sync completed: $result');
           }
