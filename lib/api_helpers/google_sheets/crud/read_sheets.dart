@@ -195,7 +195,7 @@ class SheetsReader {
     }
   }
 
-  /// Generic sync method that can work with any sheet
+ /// Generic sync method that can work with any sheet
 Future<Map<String, dynamic>> syncSheetData({
   required String sheetName,
   required String tableName,
@@ -263,11 +263,36 @@ Future<Map<String, dynamic>> syncSheetData({
       return {
         'allEqual': false,
         'mismatchedColumns': columns, // All columns are considered "mismatched" since table was empty
-        'tableName': tableName, // Include table name in response
+        'tableName': tableName,
       };
     }
 
-    // Table exists, now it's safe to read from SQLite
+    // Table exists, now check if it has any data
+    final existingRowCount = await db.rawQuery('SELECT COUNT(*) as count FROM $tableName');
+    final rowCount = existingRowCount.first['count'] as int;
+    
+    print('Table $tableName has $rowCount existing rows');
+
+    // If table exists but has no data, insert all data from sheets
+    if (rowCount == 0) {
+      print('Table $tableName is empty, inserting all data from sheets');
+      
+      // Insert all data from sheets
+      await _insertDataIntoTable(
+        db: db,
+        tableName: tableName,
+        columns: columns,
+        dataRows: dataRows,
+      );
+
+      return {
+        'allEqual': false,
+        'mismatchedColumns': columns, // All columns are considered "mismatched" since table was empty
+        'tableName': tableName,
+      };
+    }
+
+    // Table exists and has data, now read it for comparison
     final sqliteData = await _dbReader.readTable(
       tableName: tableName,
       columns: columns,
@@ -307,20 +332,16 @@ Future<Map<String, dynamic>> syncSheetData({
       ).toList();
 
       if (matchingSqliteRows.isEmpty) {
-        // No matching row in SQLite, need to insert new row
+        // No matching row in SQLite, insert new row
         print('No existing row found with $primaryKey = $keyValue, will insert new row');
         
-           await _dbUpdater.updateTable(
+        // Insert new row
+         await _dbUpdater.updateTable(
           tableName: tableName,
           whereClause: '$primaryKey = ?',
           whereArgs: [primaryKey],
           values: {primaryKey: keyValue},
         );
-        // await db.insert(
-        //   tableName,
-        //   sheetRowData.map((key, value) => MapEntry(key, value)),
-        //   conflictAlgorithm: ConflictAlgorithm.replace,
-        // );
         print('Inserted new row with $primaryKey = $keyValue');
         
         allEqual = false;
@@ -362,7 +383,7 @@ Future<Map<String, dynamic>> syncSheetData({
     return {
       'allEqual': allEqual,
       'mismatchedColumns': allMismatchedColumns.toList(),
-      'tableName': tableName, // Include table name in response
+      'tableName': tableName,
     };
     
   } catch (e) {
@@ -370,7 +391,7 @@ Future<Map<String, dynamic>> syncSheetData({
     return {
       'allEqual': false, 
       'mismatchedColumns': <String>[],
-      'tableName': tableName, // Include table name even in error case
+      'tableName': tableName,
     };
   }
 }
