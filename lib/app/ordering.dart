@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api_helpers/sqlite/insert_sqlite.dart';
 import '../api_helpers/sqlite/read_sqlite.dart';
 
@@ -275,76 +276,120 @@ class _OrderingScreenState extends State<OrderingScreen> {
   List<MenuItem> menuItems = [];
   bool isLoading = true;
   bool isDarkMode = false;
-  
-  // Theme management - now using direct palette selection
   AppColorPalette currentTheme = ColorThemes.freshGreen;
+  int selectedThemeIndex = 0;
+  static const String _themeIndexKey = 'selected_theme_index';
+  static const String _darkModeKey = 'dark_mode';
+  static const String _gridViewKey = 'grid_view';
 
   @override
   void initState() {
     super.initState();
+    _loadPreferences();
     _loadMenuItems();
   }
- void _toggleDarkMode(bool value) {
-    setState(() {
-      isDarkMode = value;
-      if (isDarkMode) {
-        if (currentTheme == ColorThemes.freshGreen || currentTheme == ColorThemes.pastelGreen) {
-          currentTheme = ColorThemes.darkGreen;
-        } else {
-          currentTheme = ColorThemes.darkMinimalist;
-        }
-      } else {
-        currentTheme = ColorThemes.freshGreen;
-      }
-    });
-  }
- Future _loadMenuItems() async {
-  try {
-    final List<Map<String, dynamic>> items = await _dbReader.readTable(
-      tableName: 'itemnames',
-      columns: ['ctr', 'itemname', 'uom', 'sold_count'],
-      orderBy: 'sold_count DESC',
-    );
-    final List<Map<String, dynamic>> priceList = await _dbReader.readTable(
-      tableName: 'item_price',
-      columns: ['ctr', 'prev_price', 'curr_price'],
-    );
-    final Map<String, double> priceMap = {
-      for (var item in priceList)
-        item['ctr'].toString(): item['curr_price'] != 'TBA'
-            ? double.tryParse(item['curr_price'].toString()) ?? double.tryParse(item['prev_price'].toString()) ?? 0.00
-            : double.tryParse(item['prev_price'].toString()) ?? 0.00
-    };
 
-    // Step 4: Map items to MenuItem list with prices
-    setState(() {
-      menuItems = items.map((item) {
-        final String ctr = item['ctr']?.toString() ?? '';
-        return MenuItem(
-          id: ctr,
-          name: item['itemname']?.toString() ?? 'Unknown Item',
-          price: priceMap[ctr] ?? 0.00,
-          uom: item['uom']?.toString() ?? '',
-          image: '',
-        );
-      }).toList();
-      isLoading = false;
-    });
-  } catch (e) {
-    setState(() {
-      isLoading = false;
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error loading menu items: $e'),
-          backgroundColor: currentTheme.error,
-        ),
-      );
+  Future<void> _loadPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      setState(() {
+        selectedThemeIndex = prefs.getInt(_themeIndexKey) ?? 0;
+        isDarkMode = prefs.getBool(_darkModeKey) ?? false;
+        isGridView = prefs.getBool(_gridViewKey) ?? true;
+        _applyTheme();
+      });
+    } catch (e) {
+      print('Error loading preferences: $e');
+      setState(() {
+        selectedThemeIndex = 0;
+        isDarkMode = false;
+        isGridView = true;
+        _applyTheme();
+      });
     }
   }
-}
 
+  Future<void> _savePreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_themeIndexKey, selectedThemeIndex);
+      await prefs.setBool(_darkModeKey, isDarkMode);
+      await prefs.setBool(_gridViewKey, isGridView);
+    } catch (e) {
+      print('Error saving preferences: $e');
+    }
+  }
+
+  void _applyTheme() {
+    if (isDarkMode) {
+      if (selectedThemeIndex == 0 || selectedThemeIndex == 4) { 
+        currentTheme = ColorThemes.darkGreen;
+      } else {
+        currentTheme = ColorThemes.darkMinimalist;
+      }
+    } else {
+      if (selectedThemeIndex >= 0 && selectedThemeIndex < ColorThemes.allThemes.length) {
+        currentTheme = ColorThemes.allThemes[selectedThemeIndex];
+      } else {
+        currentTheme = ColorThemes.freshGreen; 
+      }
+    }
+  }
+
+  void _toggleDarkMode(bool value) {
+    setState(() {
+      isDarkMode = value;
+      _applyTheme();
+    });
+    _savePreferences();
+  }
+
+  Future _loadMenuItems() async {
+    try {
+      final List<Map<String, dynamic>> items = await _dbReader.readTable(
+        tableName: 'itemnames',
+        columns: ['ctr', 'itemname', 'uom', 'sold_count'],
+        orderBy: 'sold_count DESC',
+      );
+      final List<Map<String, dynamic>> priceList = await _dbReader.readTable(
+        tableName: 'item_price',
+        columns: ['ctr', 'prev_price', 'curr_price'],
+      );
+      final Map<String, double> priceMap = {
+        for (var item in priceList)
+          item['ctr'].toString(): item['curr_price'] != 'TBA'
+              ? double.tryParse(item['curr_price'].toString()) ?? double.tryParse(item['prev_price'].toString()) ?? 0.00
+              : double.tryParse(item['prev_price'].toString()) ?? 0.00
+      };
+
+      setState(() {
+        menuItems = items.map((item) {
+          final String ctr = item['ctr']?.toString() ?? '';
+          return MenuItem(
+            id: ctr,
+            name: item['itemname']?.toString() ?? 'Unknown Item',
+            price: priceMap[ctr] ?? 0.00,
+            uom: item['uom']?.toString() ?? '',
+            image: '',
+          );
+        }).toList();
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading menu items: $e'),
+            backgroundColor: currentTheme.error,
+          ),
+        );
+      }
+    }
+  }
 
   void _addToCart(MenuItem item) {
     setState(() {
@@ -365,6 +410,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
     setState(() {
       isGridView = !isGridView;
     });
+    _savePreferences();
     Navigator.pop(context);
   }
 
@@ -384,14 +430,14 @@ class _OrderingScreenState extends State<OrderingScreen> {
           ),
           content: SizedBox(
             width: double.maxFinite,
-            height: 400, // Set a fixed height for better UX
+            height: 400,
             child: ListView.builder(
               shrinkWrap: true,
               itemCount: ColorThemes.allThemes.length,
               itemBuilder: (context, index) {
                 final theme = ColorThemes.allThemes[index];
                 final themeName = ColorThemes.themeNames[index];
-                final isSelected = currentTheme == theme;
+                final isSelected = selectedThemeIndex == index;
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -414,7 +460,6 @@ class _OrderingScreenState extends State<OrderingScreen> {
                     leading: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Primary color circle
                         Container(
                           width: 20,
                           height: 20,
@@ -425,7 +470,6 @@ class _OrderingScreenState extends State<OrderingScreen> {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        // Secondary color circle
                         Container(
                           width: 16,
                           height: 16,
@@ -436,7 +480,6 @@ class _OrderingScreenState extends State<OrderingScreen> {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        // Accent color circle
                         Container(
                           width: 12,
                           height: 12,
@@ -461,8 +504,10 @@ class _OrderingScreenState extends State<OrderingScreen> {
                           ),
                     onTap: () {
                       setState(() {
-                        currentTheme = theme;
+                        selectedThemeIndex = index;
+                        _applyTheme();
                       });
+                      _savePreferences();
                       Navigator.pop(context);
                     },
                   ),
@@ -625,37 +670,37 @@ class _OrderingScreenState extends State<OrderingScreen> {
               onTap: _toggleView,
             ),
             Container(
-  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-  child: ListTile(
-    leading: Icon(
-      isDarkMode ? Icons.dark_mode : Icons.light_mode,
-      color: currentTheme.textTertiary,
-      size: 22,
-    ),
-    title: Text(
-      'Dark Mode',
-      style: TextStyle(
-        color: currentTheme.textSecondary,
-        fontSize: 15,
-        fontWeight: FontWeight.w400,
-      ),
-    ),
-    trailing: Icon(
-      isDarkMode ? Icons.toggle_on : Icons.toggle_off,
-      color: isDarkMode ? currentTheme.primary : currentTheme.textTertiary,
-      size: 32,
-    ),
-    onTap: () {
-      _toggleDarkMode(!isDarkMode);
-    },
-    contentPadding: EdgeInsets.zero,
-  ),
-),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: ListTile(
+                leading: Icon(
+                  isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                  color: currentTheme.textTertiary,
+                  size: 22,
+                ),
+                title: Text(
+                  'Dark Mode',
+                  style: TextStyle(
+                    color: currentTheme.textSecondary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                trailing: Icon(
+                  isDarkMode ? Icons.toggle_on : Icons.toggle_off,
+                  color: isDarkMode ? currentTheme.primary : currentTheme.textTertiary,
+                  size: 32,
+                ),
+                onTap: () {
+                  _toggleDarkMode(!isDarkMode);
+                },
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
             _buildDrawerItem(
               Icons.palette_outlined, 
               'Choose Theme', 
               onTap: () {
-                Navigator.pop(context); // Close drawer first
+                Navigator.pop(context);
                 _showThemeSelector();
               }
             ),
@@ -1024,7 +1069,6 @@ class _ThemeWrapperState extends State<ThemeWrapper> {
 
   ThemeData _buildTheme() {
     if (isDarkTheme) {
-      // Use dark themes when dark mode is enabled
       final darkPalette = selectedTheme == 'Fresh Green' || selectedTheme == 'Pastel Green' 
           ? ColorThemes.darkGreen 
           : ColorThemes.darkMinimalist;
