@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../models/menu_item.dart';
+import '../screens/cart_screen.dart'; 
 import '../theme/app_color_palette.dart';
 import '../services/theme_manager.dart';
 import '../services/menu_service.dart';
 import '../widgets/menu_item_tile.dart';
 import '../widgets/menu_item_list_tile.dart';
 import '../widgets/theme_selector_dialog.dart';
-import '../widgets/cart_dialog.dart';
 import '../widgets/custom_drawer.dart';
 
 class OrderingScreen extends StatefulWidget {
@@ -19,8 +19,8 @@ class OrderingScreen extends StatefulWidget {
 class _OrderingScreenState extends State<OrderingScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final MenuService _menuService = MenuService();
-
-  int cartItemCount = 0;
+  List<CartItem> cartItems = [];
+  int get cartItemCount => cartItems.fold(0, (sum, item) => sum + item.quantity);
   bool isGridView = true;
   Set<String> addedItems = {};
   List<MenuItem> menuItems = [];
@@ -85,15 +85,21 @@ class _OrderingScreenState extends State<OrderingScreen> {
     }
   }
 
-  void _addToCart(MenuItem item) {
+  void _addToCart(MenuItem item, [int quantity = 1]) {
     setState(() {
-      cartItemCount++;
+      final existingItemIndex = cartItems.indexWhere((cartItem) => cartItem.menuItem.id == item.id);
+      if (existingItemIndex != -1) {
+        cartItems[existingItemIndex].quantity += quantity;
+      } else {
+        cartItems.add(CartItem(menuItem: item, quantity: quantity));
+      }
+      
       addedItems.add(item.id);
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${item.name} added to cart'),
+        content: Text('$quantity ${item.name}${quantity > 1 ? 's' : ''} added to cart'),
         duration: const Duration(seconds: 2),
         backgroundColor: currentTheme.success,
       ),
@@ -126,13 +132,38 @@ class _OrderingScreenState extends State<OrderingScreen> {
   }
 
   void _viewCart() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) => CartDialog(
-        theme: currentTheme,
-        cartItemCount: cartItemCount,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CartScreen(
+          theme: currentTheme,
+          cartItems: cartItems,
+          onCheckoutComplete: () {
+            setState(() {
+              cartItems.clear();
+              addedItems.clear();
+            });
+          },
+          onCartUpdated: (updatedCartItems) {
+            setState(() {
+              cartItems.clear();
+              cartItems.addAll(updatedCartItems);
+              addedItems.clear();
+              for (var cartItem in cartItems) {
+                addedItems.add(cartItem.menuItem.id);
+              }
+            });
+          },
+        ),
       ),
-    );
+    ).then((_) {
+      setState(() {
+        addedItems.clear();
+        for (var cartItem in cartItems) {
+          addedItems.add(cartItem.menuItem.id);
+        }
+      });
+    });
   }
 
   void _refreshMenu() {
@@ -169,7 +200,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.shopping_cart_outlined),
-                onPressed: _viewCart,
+                onPressed: _viewCart, 
               ),
               if (cartItemCount > 0)
                 Positioned(
@@ -252,11 +283,18 @@ class _OrderingScreenState extends State<OrderingScreen> {
       itemCount: menuItems.length,
       itemBuilder: (context, index) {
         final item = menuItems[index];
+        final existingQty = cartItems
+    .firstWhere(
+      (c) => c.menuItem.id == item.id,
+      orElse: () => CartItem(menuItem: item, quantity: 1),
+    )
+    .quantity;
         return MenuItemTile(
           item: item,
           onAddToCart: () => _addToCart(item),
           isAdded: addedItems.contains(item.id),
           theme: currentTheme,
+  currentQuantity: existingQty,
         );
       },
     );
@@ -267,10 +305,17 @@ class _OrderingScreenState extends State<OrderingScreen> {
       itemCount: menuItems.length,
       itemBuilder: (context, index) {
         final item = menuItems[index];
+        final existingQty = cartItems
+    .firstWhere(
+      (c) => c.menuItem.id == item.id,
+      orElse: () => CartItem(menuItem: item, quantity: 1),
+    )
+    .quantity;
         return MenuItemListTile(
           item: item,
           onAddToCart: () => _addToCart(item),
           isAdded: addedItems.contains(item.id),
+  currentQuantity: existingQty,
           theme: currentTheme,
         );
       },

@@ -1,37 +1,46 @@
 import 'package:flutter/material.dart';
 import '../models/menu_item.dart';
 import '../theme/app_color_palette.dart';
-import 'view_item_screen.dart';
+import '../screens/view_item_screen.dart';
 
 class MenuItemListTile extends StatelessWidget {
   final MenuItem item;
   final VoidCallback onAddToCart;
+  final Function(MenuItem, int)? onAddToCartWithQuantity;
   final bool isAdded;
   final AppColorPalette theme;
+  final int currentQuantity;  
 
   const MenuItemListTile({
     Key? key,
     required this.item,
     required this.onAddToCart,
+    this.onAddToCartWithQuantity,
     required this.isAdded,
     required this.theme,
+    this.currentQuantity = 1,
   }) : super(key: key);
 
   @override
 Widget build(BuildContext context) {
   return GestureDetector(
     onTap: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ViewItemScreen(
-            item: item,
-            theme: theme,
-            isInCart: isAdded,
-            onAddToCart: onAddToCart,
-          ),
-        ),
-      );
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ViewItemScreen(
+                item: item,
+                theme: theme,
+                isInCart: isAdded,
+  initialQuantity: currentQuantity, 
+                onAddToCart: onAddToCartWithQuantity ?? (item, quantity) {
+                  for (int i = 0; i < quantity; i++) {
+                    onAddToCart.call();
+                  }
+                },
+              ),
+            ),
+          );;
     },
     child: Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -103,7 +112,6 @@ Widget build(BuildContext context) {
             ),
             GestureDetector(
               onTap: () {
-                // This will only trigger the add to cart action
                 onAddToCart();
               },
               child: Container(

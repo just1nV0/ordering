@@ -4,21 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:ordering/screens/ordering_screen.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io' show Platform;
-
-import 'app/ordering.dart';
 import 'api_helpers/sqlite/insert_sqlite.dart';
 import 'api_helpers/google_sheets/crud/read_sheets.dart';
 import 'package:audioplayers/audioplayers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize FFI only on desktop platforms
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
-
   runApp(const MyApp());
 }
 

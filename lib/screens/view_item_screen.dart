@@ -6,8 +6,9 @@ class ViewItemScreen extends StatefulWidget {
   final MenuItem item;
   final AppColorPalette theme;
   final bool isInCart;
-  final VoidCallback? onAddToCart;
+  final Function(MenuItem, int)? onAddToCart; 
   final VoidCallback? onRemoveFromCart;
+  final int initialQuantity;
 
   const ViewItemScreen({
     Key? key,
@@ -16,6 +17,7 @@ class ViewItemScreen extends StatefulWidget {
     this.isInCart = false,
     this.onAddToCart,
     this.onRemoveFromCart,
+    this.initialQuantity = 1, 
   }) : super(key: key);
 
   @override
@@ -23,7 +25,7 @@ class ViewItemScreen extends StatefulWidget {
 }
 
 class _ViewItemScreenState extends State<ViewItemScreen> with TickerProviderStateMixin {
-  int quantity = 1;
+  late int quantity; 
   bool isFavorite = false;
   late AnimationController _fadeController;
   late AnimationController _scaleController;
@@ -33,6 +35,7 @@ class _ViewItemScreenState extends State<ViewItemScreen> with TickerProviderStat
   @override
   void initState() {
     super.initState();
+    quantity = widget.initialQuantity;
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -92,7 +95,7 @@ class _ViewItemScreenState extends State<ViewItemScreen> with TickerProviderStat
 
   void _addToCart() {
     if (widget.onAddToCart != null) {
-      widget.onAddToCart!();
+      widget.onAddToCart!(widget.item, quantity);
     }
     
     ScaffoldMessenger.of(context).showSnackBar(
@@ -200,7 +203,6 @@ class _ViewItemScreenState extends State<ViewItemScreen> with TickerProviderStat
         IconButton(
           icon: const Icon(Icons.share_outlined),
           onPressed: () {
-            // Share functionality
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text('Share feature coming soon'),

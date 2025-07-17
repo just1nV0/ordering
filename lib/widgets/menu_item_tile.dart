@@ -1,24 +1,48 @@
 import 'package:flutter/material.dart';
 import '../models/menu_item.dart';
 import '../theme/app_color_palette.dart';
+import '../screens/view_item_screen.dart';
 
 class MenuItemTile extends StatelessWidget {
   final MenuItem item;
   final VoidCallback onAddToCart;
+  final Function(MenuItem, int)? onAddToCartWithQuantity;
   final bool isAdded;
   final AppColorPalette theme;
+  final int currentQuantity; 
 
   const MenuItemTile({
     Key? key,
     required this.item,
     required this.onAddToCart,
+    this.onAddToCartWithQuantity,
     required this.isAdded,
     required this.theme,
+    this.currentQuantity = 1,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+    onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ViewItemScreen(
+                item: item,
+                theme: theme,
+                isInCart: isAdded,
+  initialQuantity: currentQuantity,
+                onAddToCart: onAddToCartWithQuantity ?? (item, quantity) {
+                  for (int i = 0; i < quantity; i++) {
+                    onAddToCart.call();
+                  }
+                },
+              ),
+            ),
+          );
+    },
+    child:  Container(
       decoration: BoxDecoration(
         color: theme.surface,
         borderRadius: BorderRadius.circular(8),
@@ -114,6 +138,7 @@ class MenuItemTile extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
-}
+  }
