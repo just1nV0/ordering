@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/menu_item.dart';
-import '../screens/cart_screen.dart'; 
+import '../screens/cart_screen.dart';
 import '../theme/app_color_palette.dart';
 import '../services/theme_manager.dart';
 import '../services/menu_service.dart';
@@ -20,7 +20,8 @@ class _OrderingScreenState extends State<OrderingScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final MenuService _menuService = MenuService();
   List<CartItem> cartItems = [];
-  int get cartItemCount => cartItems.fold(0, (sum, item) => sum + item.quantity);
+  int get cartItemCount =>
+      cartItems.fold(0, (sum, item) => sum + item.quantity);
   bool isGridView = true;
   Set<String> addedItems = {};
   List<MenuItem> menuItems = [];
@@ -38,7 +39,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
 
   Future<void> _loadPreferences() async {
     final preferences = await ThemeManager.loadPreferences();
-    
+
     setState(() {
       selectedThemeIndex = preferences['selectedThemeIndex'];
       isDarkMode = preferences['isDarkMode'];
@@ -87,24 +88,79 @@ class _OrderingScreenState extends State<OrderingScreen> {
 
   void _addToCart(MenuItem item, [int quantity = 1]) {
     setState(() {
-      final existingItemIndex = cartItems.indexWhere((cartItem) => cartItem.menuItem.id == item.id);
+      final existingItemIndex = cartItems.indexWhere(
+        (cartItem) => cartItem.menuItem.id == item.id,
+      );
       if (existingItemIndex != -1) {
-        cartItems[existingItemIndex].quantity += quantity;
+        cartItems[existingItemIndex].quantity = quantity;
       } else {
         cartItems.add(CartItem(menuItem: item, quantity: quantity));
       }
-      
+
       addedItems.add(item.id);
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$quantity ${item.name}${quantity > 1 ? 's' : ''} added to cart'),
+        content: Text(
+          '$quantity ${item.name}${quantity > 1 ? 's' : ''} added to cart',
+        ),
         duration: const Duration(seconds: 2),
         backgroundColor: currentTheme.success,
       ),
     );
   }
+
+// void _addToCart(MenuItem item, [int quantity = 1, bool overwrite = false]) {
+//   setState(() {
+//     final existingItemIndex = cartItems.indexWhere((cartItem) => cartItem.menuItem.id == item.id);
+//     if (existingItemIndex != -1) {
+//       if (overwrite) {
+//         cartItems[existingItemIndex].quantity = quantity;
+//       } else {
+//         cartItems[existingItemIndex].quantity += quantity;
+//       }
+//     } else {
+//       cartItems.add(CartItem(menuItem: item, quantity: quantity));
+//     }
+    
+//     addedItems.add(item.id);
+//   });
+
+//   ScaffoldMessenger.of(context).showSnackBar(
+//     SnackBar(
+//       content: Text('$quantity ${item.name}${quantity > 1 ? 's' : ''} ${overwrite ? 'updated in' : 'added to'} cart'),
+//       duration: const Duration(seconds: 2),
+//       backgroundColor: currentTheme.success,
+//     ),
+//   );
+// }
+
+
+// void _addToCart(MenuItem item, [int quantity = 1, bool overwrite = false]) {
+//   setState(() {
+//     final existingItemIndex = cartItems.indexWhere((cartItem) => cartItem.menuItem.id == item.id);
+//     if (existingItemIndex != -1) {
+//       if (overwrite) {
+//         cartItems[existingItemIndex].quantity = quantity;
+//       } else {
+//         cartItems[existingItemIndex].quantity += quantity;
+//       }
+//     } else {
+//       cartItems.add(CartItem(menuItem: item, quantity: quantity));
+//     }
+    
+//     addedItems.add(item.id);
+//   });
+
+//   ScaffoldMessenger.of(context).showSnackBar(
+//     SnackBar(
+//       content: Text('$quantity ${item.name}${quantity > 1 ? 's' : ''} ${overwrite ? 'updated in' : 'added to'} cart'),
+//       duration: const Duration(seconds: 2),
+//       backgroundColor: currentTheme.success,
+//     ),
+//   );
+// }
 
   void _toggleView() {
     setState(() {
@@ -123,7 +179,10 @@ class _OrderingScreenState extends State<OrderingScreen> {
         onThemeSelected: (index) {
           setState(() {
             selectedThemeIndex = index;
-            currentTheme = ThemeManager.applyTheme(selectedThemeIndex, isDarkMode);
+            currentTheme = ThemeManager.applyTheme(
+              selectedThemeIndex,
+              isDarkMode,
+            );
           });
           _savePreferences();
         },
@@ -200,7 +259,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.shopping_cart_outlined),
-                onPressed: _viewCart, 
+                onPressed: _viewCart,
               ),
               if (cartItemCount > 0)
                 Positioned(
@@ -239,10 +298,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
         onThemeSelector: _showThemeSelector,
         onRefreshMenu: _refreshMenu,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: _buildBody(),
-      ),
+      body: Padding(padding: const EdgeInsets.all(16.0), child: _buildBody()),
     );
   }
 
@@ -284,17 +340,17 @@ class _OrderingScreenState extends State<OrderingScreen> {
       itemBuilder: (context, index) {
         final item = menuItems[index];
         final existingQty = cartItems
-    .firstWhere(
-      (c) => c.menuItem.id == item.id,
-      orElse: () => CartItem(menuItem: item, quantity: 1),
-    )
-    .quantity;
+            .firstWhere(
+              (c) => c.menuItem.id == item.id,
+              orElse: () => CartItem(menuItem: item, quantity: 1),
+            )
+            .quantity;
         return MenuItemTile(
           item: item,
           onAddToCart: () => _addToCart(item),
           isAdded: addedItems.contains(item.id),
           theme: currentTheme,
-  currentQuantity: existingQty,
+          currentQuantity: existingQty,
         );
       },
     );
@@ -306,16 +362,16 @@ class _OrderingScreenState extends State<OrderingScreen> {
       itemBuilder: (context, index) {
         final item = menuItems[index];
         final existingQty = cartItems
-    .firstWhere(
-      (c) => c.menuItem.id == item.id,
-      orElse: () => CartItem(menuItem: item, quantity: 1),
-    )
-    .quantity;
+            .firstWhere(
+              (c) => c.menuItem.id == item.id,
+              orElse: () => CartItem(menuItem: item, quantity: 1),
+            )
+            .quantity;
         return MenuItemListTile(
           item: item,
           onAddToCart: () => _addToCart(item),
           isAdded: addedItems.contains(item.id),
-  currentQuantity: existingQty,
+          currentQuantity: existingQty,
           theme: currentTheme,
         );
       },
