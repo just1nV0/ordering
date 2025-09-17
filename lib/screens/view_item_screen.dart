@@ -107,6 +107,26 @@ class _ViewItemScreenState extends State<ViewItemScreen> with TickerProviderStat
     );
   }
 
+void _UpdateCart() async{
+   print(await widget.item);
+  print(widget.onRemoveFromCart);
+  print(widget.onAddToCart);
+  print(widget.initialQuantity);
+
+
+    // if (widget.onAddToCart != null) {
+    //   widget.onAddToCart!(widget.item, quantity);
+    // }
+    
+    // ScaffoldMessenger.of(context).showSnackBar(
+    //   SnackBar(
+    //     content: Text('$quantity ${widget.item.name}${quantity > 1 ? 's' : ''} added to cart'),
+    //     duration: const Duration(seconds: 2),
+    //     backgroundColor: widget.theme.success,
+    //   ),
+    // );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -530,7 +550,7 @@ class _ViewItemScreenState extends State<ViewItemScreen> with TickerProviderStat
           width: double.infinity,
           height: 56,
           child: ElevatedButton(
-            onPressed: _addToCart,
+            onPressed: widget.isInCart ? _UpdateCart:_addToCart,
             style: ElevatedButton.styleFrom(
               backgroundColor: widget.theme.primary,
               foregroundColor: widget.theme.surface,

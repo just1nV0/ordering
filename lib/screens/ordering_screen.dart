@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/menu_item.dart';
+import '../models/cart_item.dart';
 import '../screens/cart_screen.dart';
+import '../screens/order_history_screen.dart';
 import '../theme/app_color_palette.dart';
 import '../services/theme_manager.dart';
 import '../services/menu_service.dart';
@@ -8,6 +10,7 @@ import '../widgets/menu_item_tile.dart';
 import '../widgets/menu_item_list_tile.dart';
 import '../widgets/theme_selector_dialog.dart';
 import '../widgets/custom_drawer.dart';
+import '../widgets/cart_widget.dart';
 
 class OrderingScreen extends StatefulWidget {
   const OrderingScreen({Key? key}) : super(key: key);
@@ -19,9 +22,11 @@ class OrderingScreen extends StatefulWidget {
 class _OrderingScreenState extends State<OrderingScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final MenuService _menuService = MenuService();
+  final PageController _pageController = PageController();
+
   List<CartItem> cartItems = [];
   int get cartItemCount =>
-      cartItems.fold(0, (sum, item) => sum + item.quantity);
+      cartItems.fold<int>(0, (sum, item) => sum + item.quantity);
   bool isGridView = true;
   Set<String> addedItems = {};
   List<MenuItem> menuItems = [];
@@ -29,12 +34,19 @@ class _OrderingScreenState extends State<OrderingScreen> {
   bool isDarkMode = false;
   AppColorPalette currentTheme = ThemeManager.applyTheme(0, false);
   int selectedThemeIndex = 0;
+  int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _loadPreferences();
     _loadMenuItems();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPreferences() async {
@@ -111,57 +123,6 @@ class _OrderingScreenState extends State<OrderingScreen> {
     );
   }
 
-// void _addToCart(MenuItem item, [int quantity = 1, bool overwrite = false]) {
-//   setState(() {
-//     final existingItemIndex = cartItems.indexWhere((cartItem) => cartItem.menuItem.id == item.id);
-//     if (existingItemIndex != -1) {
-//       if (overwrite) {
-//         cartItems[existingItemIndex].quantity = quantity;
-//       } else {
-//         cartItems[existingItemIndex].quantity += quantity;
-//       }
-//     } else {
-//       cartItems.add(CartItem(menuItem: item, quantity: quantity));
-//     }
-    
-//     addedItems.add(item.id);
-//   });
-
-//   ScaffoldMessenger.of(context).showSnackBar(
-//     SnackBar(
-//       content: Text('$quantity ${item.name}${quantity > 1 ? 's' : ''} ${overwrite ? 'updated in' : 'added to'} cart'),
-//       duration: const Duration(seconds: 2),
-//       backgroundColor: currentTheme.success,
-//     ),
-//   );
-// }
-
-
-// void _addToCart(MenuItem item, [int quantity = 1, bool overwrite = false]) {
-//   setState(() {
-//     final existingItemIndex = cartItems.indexWhere((cartItem) => cartItem.menuItem.id == item.id);
-//     if (existingItemIndex != -1) {
-//       if (overwrite) {
-//         cartItems[existingItemIndex].quantity = quantity;
-//       } else {
-//         cartItems[existingItemIndex].quantity += quantity;
-//       }
-//     } else {
-//       cartItems.add(CartItem(menuItem: item, quantity: quantity));
-//     }
-    
-//     addedItems.add(item.id);
-//   });
-
-//   ScaffoldMessenger.of(context).showSnackBar(
-//     SnackBar(
-//       content: Text('$quantity ${item.name}${quantity > 1 ? 's' : ''} ${overwrite ? 'updated in' : 'added to'} cart'),
-//       duration: const Duration(seconds: 2),
-//       backgroundColor: currentTheme.success,
-//     ),
-//   );
-// }
-
   void _toggleView() {
     setState(() {
       isGridView = !isGridView;
@@ -232,6 +193,24 @@ class _OrderingScreenState extends State<OrderingScreen> {
     _loadMenuItems();
   }
 
+  void _onTabSelected(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  List<String> get _appBarTitles => [
+    'Home',
+    'Orders',
+    'Account',
+    'Notifications',
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -239,7 +218,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
       backgroundColor: currentTheme.background,
       appBar: AppBar(
         title: Text(
-          'Menu',
+          _appBarTitles[_currentIndex],
           style: TextStyle(
             fontWeight: FontWeight.w400,
             letterSpacing: 0.5,
@@ -254,55 +233,129 @@ class _OrderingScreenState extends State<OrderingScreen> {
           icon: const Icon(Icons.menu),
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
-        actions: [
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.shopping_cart_outlined),
-                onPressed: _viewCart,
-              ),
-              if (cartItemCount > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: currentTheme.accent,
-                      borderRadius: BorderRadius.circular(10),
+        actions: _currentIndex == 0
+            ? [
+                Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.shopping_cart_outlined),
+                      onPressed: _viewCart,
                     ),
-                    constraints: const BoxConstraints(
-                      minWidth: 16,
-                      minHeight: 16,
-                    ),
-                    child: Text(
-                      '$cartItemCount',
-                      style: TextStyle(
-                        color: currentTheme.surface,
-                        fontSize: 12,
+                    if (cartItemCount > 0)
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: currentTheme.accent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          child: Text(
+                            '$cartItemCount',
+                            style: TextStyle(
+                              color: currentTheme.surface,
+                              fontSize: 12,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
+                  ],
                 ),
-            ],
-          ),
+              ]
+            : null,
+      ),
+      drawer: _currentIndex == 0
+          ? CustomDrawer(
+              theme: currentTheme,
+              isGridView: isGridView,
+              isDarkMode: isDarkMode,
+              onToggleView: _toggleView,
+              onToggleDarkMode: _toggleDarkMode,
+              onThemeSelector: _showThemeSelector,
+              onRefreshMenu: _refreshMenu,
+            )
+          : null,
+      body: PageView(
+        controller: _pageController,
+        onPageChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        children: [
+          Padding(padding: const EdgeInsets.all(16.0), child: _buildMenuBody()),
+          _buildOrdersTab(),
+          OrderHistoryScreen(theme: currentTheme),
+          _buildNotificationsBody(),
         ],
       ),
-      drawer: CustomDrawer(
-        theme: currentTheme,
-        isGridView: isGridView,
-        isDarkMode: isDarkMode,
-        onToggleView: _toggleView,
-        onToggleDarkMode: _toggleDarkMode,
-        onThemeSelector: _showThemeSelector,
-        onRefreshMenu: _refreshMenu,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: currentTheme.surface,
+          boxShadow: [
+            BoxShadow(
+              color: currentTheme.textPrimary.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          currentIndex: _currentIndex,
+          onTap: _onTabSelected,
+          backgroundColor: currentTheme.surface,
+          selectedItemColor: currentTheme.primary,
+          unselectedItemColor: currentTheme.textSecondary,
+          elevation: 0,
+          selectedLabelStyle: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+          ),
+          items: [
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home, color: currentTheme.primary),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.receipt_long_outlined),
+              activeIcon: Icon(Icons.receipt_long, color: currentTheme.primary),
+              label: 'Orders',
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.account_circle_outlined),
+              activeIcon: Icon(
+                Icons.account_circle,
+                color: currentTheme.primary,
+              ),
+              label: 'Account',
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.notifications_outlined),
+              activeIcon: Icon(
+                Icons.notifications,
+                color: currentTheme.primary,
+              ),
+              label: 'Notifications',
+            ),
+          ],
+        ),
       ),
-      body: Padding(padding: const EdgeInsets.all(16.0), child: _buildBody()),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildMenuBody() {
     if (isLoading) {
       return Center(
         child: CircularProgressIndicator(
@@ -375,6 +428,57 @@ class _OrderingScreenState extends State<OrderingScreen> {
           theme: currentTheme,
         );
       },
+    );
+  }
+
+  Widget _buildOrdersTab() {
+    return CartWidget(
+      theme: currentTheme,
+      cartItems: cartItems,
+      onCartUpdated: (updated) {
+        setState(() {
+          cartItems.clear();
+          cartItems.addAll(updated);
+          addedItems.clear();
+          for (var c in cartItems) addedItems.add(c.menuItem.id);
+        });
+      },
+      onCheckoutComplete: () {
+        setState(() {
+          cartItems.clear();
+          addedItems.clear();
+        });
+      },
+    );
+  }
+
+  Widget _buildNotificationsBody() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.notifications_outlined,
+            size: 64,
+            color: currentTheme.textSecondary,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Notifications',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              color: currentTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Important updates and alerts will appear here',
+            style: TextStyle(fontSize: 16, color: currentTheme.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,18 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/menu_item.dart';
+import '../models/cart_item.dart';
 import '../theme/app_color_palette.dart';
-
-class CartItem {
-  final MenuItem menuItem;
-  int quantity;
-  
-  CartItem({
-    required this.menuItem,
-    this.quantity = 1,
-  });
-  
-  double get totalPrice => menuItem.price * quantity;
-}
 
 class CartScreen extends StatefulWidget {
   final AppColorPalette theme;
