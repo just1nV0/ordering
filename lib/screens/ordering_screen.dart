@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/menu_item.dart';
 import '../models/cart_item.dart';
-import '../screens/cart_screen.dart';
 import '../screens/order_history_screen.dart';
 import '../theme/app_color_palette.dart';
 import '../services/theme_manager.dart';
@@ -151,41 +150,6 @@ class _OrderingScreenState extends State<OrderingScreen> {
     );
   }
 
-  void _viewCart() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CartScreen(
-          theme: currentTheme,
-          cartItems: cartItems,
-          onCheckoutComplete: () {
-            setState(() {
-              cartItems.clear();
-              addedItems.clear();
-            });
-          },
-          onCartUpdated: (updatedCartItems) {
-            setState(() {
-              cartItems.clear();
-              cartItems.addAll(updatedCartItems);
-              addedItems.clear();
-              for (var cartItem in cartItems) {
-                addedItems.add(cartItem.menuItem.id);
-              }
-            });
-          },
-        ),
-      ),
-    ).then((_) {
-      setState(() {
-        addedItems.clear();
-        for (var cartItem in cartItems) {
-          addedItems.add(cartItem.menuItem.id);
-        }
-      });
-    });
-  }
-
   void _refreshMenu() {
     setState(() {
       isLoading = true;
@@ -201,6 +165,41 @@ class _OrderingScreenState extends State<OrderingScreen> {
       index,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
+    );
+  }
+
+  int get cartBadgeCount {
+    final uniqueCtrs = <String>{};
+    for (final c in cartItems) {
+      if (c.quantity <= 0) continue;
+      final ctr = c.menuItem.id;
+      uniqueCtrs.add(ctr.toString());
+    }
+    return uniqueCtrs.length;
+  }
+
+  String _cartCountLabel(int count) => count > 99 ? '99+' : '$count';
+
+  Widget _ordersIcon({required bool active}) {
+    final icon = Icon(
+      active ? Icons.receipt_long : Icons.receipt_long_outlined,
+      color: active ? currentTheme.primary : null,
+    );
+
+    return Badge(
+      isLabelVisible: cartBadgeCount > 0,
+      alignment: Alignment.topRight,
+      offset: const Offset(6, -6),
+      backgroundColor: currentTheme.accent,
+      label: Text(
+        _cartCountLabel(cartBadgeCount),
+        style: TextStyle(
+          color: currentTheme.surface,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      child: icon,
     );
   }
 
@@ -233,42 +232,6 @@ class _OrderingScreenState extends State<OrderingScreen> {
           icon: const Icon(Icons.menu),
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
-        actions: _currentIndex == 0
-            ? [
-                Stack(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.shopping_cart_outlined),
-                      onPressed: _viewCart,
-                    ),
-                    if (cartItemCount > 0)
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            color: currentTheme.accent,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          child: Text(
-                            '$cartItemCount',
-                            style: TextStyle(
-                              color: currentTheme.surface,
-                              fontSize: 12,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ]
-            : null,
       ),
       drawer: _currentIndex == 0
           ? CustomDrawer(
@@ -329,8 +292,8 @@ class _OrderingScreenState extends State<OrderingScreen> {
               label: 'Home',
             ),
             BottomNavigationBarItem(
-              icon: const Icon(Icons.receipt_long_outlined),
-              activeIcon: Icon(Icons.receipt_long, color: currentTheme.primary),
+              icon: _ordersIcon(active: false),
+              activeIcon: _ordersIcon(active: true),
               label: 'Orders',
             ),
             BottomNavigationBarItem(

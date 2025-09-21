@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/cart_item.dart';
 import '../theme/app_color_palette.dart';
+import '../api_helpers/google_sheets/crud/write_sheets.dart';
 
 class CartWidget extends StatefulWidget {
   final AppColorPalette theme;
@@ -22,6 +23,9 @@ class CartWidget extends StatefulWidget {
 
 class _CartWidgetState extends State<CartWidget> {
   late List<CartItem> _cartItems;
+  bool _isProcessingCheckout = false;
+  static const String _spreadsheetId = '1uuQtJKa7NngVjHEbV2wsq4BaEOAbKPPeLf2L5NObCcU';
+  static const String _serviceAccountAssetPath = 'assets/service_account.json';
 
   @override
   void initState() {
@@ -41,6 +45,101 @@ class _CartWidgetState extends State<CartWidget> {
       setState(() => _cartItems[index].quantity = newQuantity);
     }
     widget.onCartUpdated?.call(_cartItems);
+  }
+
+  Future<void> _processCheckout() async {
+    if (_cartItems.isEmpty || _isProcessingCheckout) return;
+
+    setState(() {
+      _isProcessingCheckout = true;
+    });
+
+    try {
+      // Debug: Print configuration
+      print('🔍 Debug Info:');
+      print('   Spreadsheet ID: $_spreadsheetId');
+      print('   Service Account Path: $_serviceAccountAssetPath');
+      print('   Cart items count: ${_cartItems.length}');
+
+      final DateTime now = DateTime.now();
+      final String formattedDateTime = 
+          '${now.day}/${now.month}/${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+      // Try to create the sheet if it doesn't exist
+      try {
+        await SheetsWriter.createSheetIfNotExists(
+          spreadsheetId: _spreadsheetId,
+          serviceAccountJsonAssetPath: _serviceAccountAssetPath,
+          sheetName: 'orders',
+        );
+        print('✅ Sheet verification/creation completed');
+      } catch (e) {
+        print('⚠️ Sheet creation check failed: $e');
+      }
+
+      // Process each cart item as a separate row
+      for (int i = 0; i < _cartItems.length; i++) {
+        final CartItem cartItem = _cartItems[i];
+        if (cartItem.quantity > 0) {
+          final List<Object?> rowValues = [
+            formattedDateTime,           // Date and Time
+            cartItem.quantity,           // Quantity
+            cartItem.menuItem.id,        // CTR (item ID)
+            cartItem.menuItem.name,      // Item name (for reference)
+            cartItem.menuItem.price,     // Price per unit
+            cartItem.totalPrice,         // Total per item
+          ];
+
+          print('📝 Inserting row ${i + 1}: $rowValues');
+
+          await SheetsWriter.appendRow(
+            spreadsheetId: _spreadsheetId,
+            serviceAccountJsonAssetPath: _serviceAccountAssetPath,
+            sheetName: 'orders',
+            rowValues: rowValues,
+          );
+
+          print('✅ Successfully inserted row ${i + 1}');
+        }
+      }
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Order placed successfully!'),
+            backgroundColor: widget.theme.success,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+      // Clear the cart after successful submission
+      setState(() => _cartItems.clear());
+      widget.onCheckoutComplete?.call();
+      
+    } catch (e) {
+      // Enhanced error logging
+      print('❌ Checkout failed: $e');
+      print('Stack trace: ${StackTrace.current}');
+      
+      // Handle error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Checkout failed: ${e.toString()}'),
+            backgroundColor: widget.theme.error,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessingCheckout = false;
+        });
+      }
+    }
   }
 
   @override
@@ -224,14 +323,29 @@ class _CartWidgetState extends State<CartWidget> {
         ),
         const SizedBox(height: 12),
         ElevatedButton(
-          onPressed: () {
-            setState(() => _cartItems.clear());
-            widget.onCheckoutComplete?.call();
-          },
+          onPressed: _isProcessingCheckout ? null : _processCheckout,
           style: ElevatedButton.styleFrom(
             backgroundColor: widget.theme.primary,
+            padding: const EdgeInsets.symmetric(vertical: 16),
           ),
-          child: const Text("Checkout"),
+          child: _isProcessingCheckout
+              ? SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      widget.theme.surface,
+                    ),
+                  ),
+                )
+              : const Text(
+                  "Checkout",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
         ),
       ],
     ),

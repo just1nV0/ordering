@@ -1,5 +1,3 @@
-// ignore_for_file: avoid_print
-
 import 'package:flutter/material.dart';
 import 'package:ordering/screens/ordering_screen.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -7,6 +5,7 @@ import 'dart:io' show Platform;
 import 'api_helpers/sqlite/insert_sqlite.dart';
 import 'api_helpers/google_sheets/crud/read_sheets.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:ordering/screens/login_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -103,8 +102,6 @@ class _LoadingScreenState extends State<LoadingScreen> {
         spreadsheetId: spreadsheetId,
         serviceAccountJsonAssetPath: serviceAccountJsonAssetPath,
       );
-
-      // Get sync result with mismatched columns
       final syncResult = await _sheetsReader.syncLastUpData();
       final bool allEqual = syncResult['allEqual'] ?? false;
       final List<String> mismatchedColumns = List<String>.from(syncResult['mismatchedColumns'] ?? []);
@@ -116,10 +113,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
         setState(() {
           _loadingMessage = 'Loading updated data...';
         });
-
         final dataInserter = DataInserter();
-
-        // Handle itemnames data update
         if (mismatchedColumns.contains("itemnames")) {
           setState(() {
             _loadingMessage = 'Loading item names...';
@@ -132,26 +126,18 @@ class _LoadingScreenState extends State<LoadingScreen> {
 
           if (_itemNamesData != null) {
             print('Successfully loaded ${_itemNamesData!.length} rows from itemnames sheet');
-            
             setState(() {
               _loadingMessage = 'Analyzing item names changes...';
             });
-
-            // Get statistics before sync
             final stats = await dataInserter.getTableSyncStats('itemnames', _itemNamesData!);
             print('Item names sync analysis: $stats');
-            
             setState(() {
               _loadingMessage = 'Syncing item names to database...';
             });
-
-            // Use the new intelligent insert/update method
             final result = await dataInserter.insertOrUpdateDataToTable('itemnames', _itemNamesData!);
             print('Item names sync completed: $result');
           }
         }
-
-        // Handle item_price data update
         if (mismatchedColumns.contains("item_price")) {
           setState(() {
             _loadingMessage = 'Loading item prices...';
@@ -189,9 +175,14 @@ class _LoadingScreenState extends State<LoadingScreen> {
       await Future.delayed(const Duration(seconds: 3));
 
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const OrderingScreen()),
-        );
+        // Navigator.of(context).pushReplacement(
+        //   MaterialPageRoute(builder: (_) => const OrderingScreen()),
+        // );
+
+        Navigator.push(
+  context,
+  MaterialPageRoute(builder: (context) => const LoginScreen()),
+);
       }
     } catch (e) {
       print('Error initializing app: $e');
@@ -202,11 +193,16 @@ class _LoadingScreenState extends State<LoadingScreen> {
       await Future.delayed(const Duration(seconds: 3));
       
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => const OrderingScreen(),
-          ),
-        );
+        // Navigator.of(context).pushReplacement(
+        //   MaterialPageRoute(
+        //     builder: (_) => const OrderingScreen(),
+        //   ),
+        // );
+        
+Navigator.push(
+  context,
+  MaterialPageRoute(builder: (context) => const LoginScreen()),
+);
       }
     }
   }

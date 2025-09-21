@@ -139,19 +139,16 @@ class DataInserter {
     return result;
   }
 
-  /// Helper method to safely convert values to int
   int? _safeToInt(dynamic value) {
     if (value == null) return null;
     
     try {
       if (value is int) return value;
       if (value is String) {
-        // Handle empty strings
         if (value.trim().isEmpty) return null;
         return int.parse(value);
       }
       if (value is double) return value.toInt();
-      // Try to parse as string if it's any other type
       return int.parse(value.toString());
     } catch (e) {
       return null;
