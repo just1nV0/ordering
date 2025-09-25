@@ -115,7 +115,11 @@ class SheetsReader {
     return data.map((row) {
       final Map<String, dynamic> rowMap = {};
       for (int i = 0; i < headers.length; i++) {
-        rowMap[headers[i]] = i < row.length ? row[i] : null;
+        // Ensure the header key is trimmed and consistent
+        final headerKey = headers[i].trim();
+        if (headerKey.isNotEmpty) {
+           rowMap[headerKey] = i < row.length ? row[i] : null;
+        }
       }
       return rowMap;
     }).toList();
