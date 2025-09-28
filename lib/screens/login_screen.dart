@@ -11,6 +11,8 @@ import '../services/theme_manager.dart';
 import '../api_helpers/google_sheets/crud/write_sheets.dart';
 import '../api_helpers/google_sheets/crud/read_sheets.dart';
 import '../api_helpers/google_sheets/crud/update_sheets.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class LoginScreen extends StatefulWidget {
   final void Function(String username, String phone)? onLoginSuccess;
@@ -40,13 +42,13 @@ class _LoginScreenState extends State<LoginScreen>
       '1uuQtJKa7NngVjHEbV2wsq4BaEOAbKPPeLf2L5NObCcU';
   static const String _serviceAccountPath = 'assets/service_account.json';
   static const String _sheetName = 'accounts';
+  static const String _sysSetupSheetName = 'sys_setup';
 
   @override
   void initState() {
     super.initState();
     _loadPreferences();
 
-    // Initialize shake animation
     _shakeController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -75,16 +77,13 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  // Add haptic feedback function
   void _triggerHapticFeedback() {
-    // Use multiple haptic feedbacks to simulate vibration pattern
     HapticFeedback.heavyImpact();
     Future.delayed(const Duration(milliseconds: 100), () {
       HapticFeedback.heavyImpact();
     });
   }
 
-  // Add shake animation function
   void _triggerShake() {
     _shakeController.reset();
     _shakeController.forward();
@@ -133,6 +132,101 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  Future<Map<String, String>> _getDeviceBrandAndModel() async {
+    final deviceInfoPlugin = DeviceInfoPlugin();
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfoPlugin.androidInfo;
+        return {'brand': androidInfo.brand, 'model': androidInfo.model};
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfoPlugin.iosInfo;
+        return {'brand': 'Apple', 'model': iosInfo.model};
+      } else {
+        return {'brand': 'Unknown', 'model': 'Unknown'};
+      }
+    } catch (e) {
+      return {'brand': 'Error', 'model': 'Error getting device info'};
+    }
+  }
+
+  Future<String?> _fetchAdminEmail() async {
+    try {
+      final sheetsReader = SheetsReader();
+      await sheetsReader.initialize(
+        spreadsheetId: _spreadsheetId,
+        serviceAccountJsonAssetPath: _serviceAccountPath,
+      );
+
+      final sysSetupData = await sheetsReader.readSheetAsMapList(
+        sheetName: _sysSetupSheetName,
+        range: 'A:Z',
+      );
+
+      if (sysSetupData != null && sysSetupData.isNotEmpty) {
+        for (final record in sysSetupData) {
+          if (record.containsKey('email') && record['email'] != null) {
+            return record['email'].toString().trim();
+          }
+          if (record.containsKey('admin_email') &&
+              record['admin_email'] != null) {
+            return record['admin_email'].toString().trim();
+          }
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error fetching admin email: $e');
+      return null;
+    }
+  }
+
+  Future<void> _sendEmailNotification({
+    required String adminEmail,
+    required String userName,
+    required String userPhone,
+    required String deviceBrand,
+    required String deviceModel,
+  }) async {
+    try {
+      const String emailJsServiceId = 'service_p47j4x9';
+      const String emailJsTemplateId = 'template_rqplqxb';
+      const String emailJsUserId = 'YOUR_USER_ID';
+
+      final emailData = {
+        'service_id': emailJsServiceId,
+        'template_id': emailJsTemplateId,
+        'user_id': emailJsUserId,
+        'template_params': {
+          'to_email': adminEmail,
+          'user_name': userName,
+          'user_phone': userPhone,
+          'device_brand': deviceBrand,
+          'device_model': deviceModel,
+          'request_time': DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()),
+        },
+      };
+
+      final response = await http.post(
+        Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(emailData),
+      );
+
+      if (response.statusCode == 200) {
+        print('Email notification sent successfully to: $adminEmail');
+        _showStatusSnackBar('Notification email sent to admin', isError: false);
+      } else {
+        print(
+          'Failed to send email notification: ${response.statusCode} - ${response.body}',
+        );
+        _showStatusSnackBar('Failed to send notification email', isError: true);
+      }
+    } catch (e) {
+      print('Error sending email notification: $e');
+      _showStatusSnackBar('Error sending notification email', isError: true);
+    }
+  }
+
   Future<int> _getNextCtr() async {
     try {
       final lastCtr = await SheetsWriter.getLastCtr(
@@ -166,6 +260,8 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       final username = _usernameController.text.trim();
       final phone = _phoneController.text.trim();
+      final currentDeviceInfo = await _getDeviceInfo();
+      final deviceInfo = await _getDeviceBrandAndModel();
 
       final sheetsReader = SheetsReader();
       await sheetsReader.initialize(
@@ -183,8 +279,10 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (accountsData != null) {
         for (int i = 0; i < accountsData.length; i++) {
-          if (accountsData[i]['phone']?.toString().trim() == phone) {
-            existingUser = accountsData[i];
+          final record = accountsData[i];
+          if (record['phone']?.toString().trim() == phone &&
+              record['device_info']?.toString().trim() == currentDeviceInfo) {
+            existingUser = record;
             existingUserRowIndex = i + 2;
             break;
           }
@@ -192,103 +290,281 @@ class _LoginScreenState extends State<LoginScreen>
       }
 
       if (existingUser != null) {
-        final accessType = existingUser['access_type']?.toString() ?? '0';
         final sheetUsername = existingUser['name']?.toString() ?? '';
-        final sheetDeviceInfo = existingUser['device_info']?.toString() ?? '';
+        final accessType = existingUser['access_type']?.toString() ?? '0';
 
         if (accessType == '0') {
-          _showStatusSnackBar(
-            'Your account is pending authorization. Please wait for approval.',
-          );
-        } else if (accessType == '1') {
-          final currentDeviceInfo = await _getDeviceInfo();
-          if (sheetDeviceInfo != currentDeviceInfo) {
-            _showStatusSnackBar(
-              'Login from this device is not authorized. Please wait for approval.',
-            );
-          } else {
-            if (sheetUsername.toLowerCase() == username.toLowerCase()) {
-              widget.onLoginSuccess?.call(username, phone);
-
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (context) => OrderingScreen()),
-              );
-            } else {
-              final bool? wantToChange = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  backgroundColor: currentTheme!.surface,
-                  title: Text(
-                    'Confirm Name Change',
-                    style: TextStyle(color: currentTheme!.textPrimary),
-                  ),
-                  content: Text(
-                    'Your registered name is "$sheetUsername". Do you want to change it to "$username"?',
-                    style: TextStyle(color: currentTheme!.textSecondary),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(false),
-                      child: Text(
-                        'Cancel',
-                        style: TextStyle(color: currentTheme!.textSecondary),
+          if (sheetUsername.toLowerCase() != username.toLowerCase()) {
+            final bool? wantToChange = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: currentTheme!.surface,
+                title: Text(
+                  'Confirm Name Change',
+                  style: TextStyle(color: currentTheme!.textPrimary),
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Current Name:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: currentTheme!.textSecondary,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(true),
-                      child: Text(
-                        'Confirm',
-                        style: TextStyle(color: currentTheme!.primary),
+                    const SizedBox(height: 4),
+                    Text(
+                      '"$sheetUsername"',
+                      style: TextStyle(
+                        color: currentTheme!.textPrimary,
+                        fontSize: 16,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'New Name:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: currentTheme!.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '"$username"',
+                      style: TextStyle(
+                        color: currentTheme!.primary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Do you want to update your name? (Your account is still under authentication)',
+                      style: TextStyle(
+                        color: currentTheme!.textSecondary,
+                        fontSize: 14,
                       ),
                     ),
                   ],
                 ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(color: currentTheme!.textSecondary),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: Text(
+                      'Update Name',
+                      style: TextStyle(color: currentTheme!.primary),
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            if (wantToChange == true) {
+              await SheetsUpdater.updateCell(
+                spreadsheetId: _spreadsheetId,
+                serviceAccountJsonAssetPath: _serviceAccountPath,
+                sheetName: _sheetName,
+                range: 'B$existingUserRowIndex',
+                value: username,
               );
-              if (wantToChange == true) {
-                await SheetsUpdater.updateCell(
-                  spreadsheetId: _spreadsheetId,
-                  serviceAccountJsonAssetPath: _serviceAccountPath,
-                  sheetName: _sheetName,
-                  range: 'B$existingUserRowIndex',
-                  value: username,
-                );
-                widget.onLoginSuccess?.call(username, phone);
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (context) => OrderingScreen()),
-                );
-              }
+
+              _showStatusSnackBar(
+                'Name updated successfully. Your account is still under authentication. Contact Aiyah for faster approval.',
+              );
+            } else {
+              _showStatusSnackBar(
+                'Your account is still under authentication. Contact Aiyah for faster approval.',
+              );
             }
+          } else {
+            _showStatusSnackBar(
+              'Your account is still under authentication. Contact Aiyah for faster approval.',
+            );
+          }
+        } else {
+          if (sheetUsername.toLowerCase() != username.toLowerCase()) {
+            final bool? wantToChange = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: currentTheme!.surface,
+                title: Text(
+                  'Confirm Name Change',
+                  style: TextStyle(color: currentTheme!.textPrimary),
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Current Name:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: currentTheme!.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '"$sheetUsername"',
+                      style: TextStyle(
+                        color: currentTheme!.textPrimary,
+                        fontSize: 16,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'New Name:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: currentTheme!.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '"$username"',
+                      style: TextStyle(
+                        color: currentTheme!.primary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Do you want to update your name with the new one above?',
+                      style: TextStyle(
+                        color: currentTheme!.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(color: currentTheme!.textSecondary),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: Text(
+                      'Confirm Change',
+                      style: TextStyle(color: currentTheme!.primary),
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            if (wantToChange == true) {
+              await SheetsUpdater.updateCell(
+                spreadsheetId: _spreadsheetId,
+                serviceAccountJsonAssetPath: _serviceAccountPath,
+                sheetName: _sheetName,
+                range: 'B$existingUserRowIndex',
+                value: username,
+              );
+
+              widget.onLoginSuccess?.call(username, phone);
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (context) => OrderingScreen()),
+              );
+            }
+          } else {
+            widget.onLoginSuccess?.call(username, phone);
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => OrderingScreen()),
+            );
           }
         }
       } else {
-        final deviceInfo = await _getDeviceInfo();
-        final ctr = await _getNextCtr();
-        final creationDate = DateFormat(
-          'dd/MM/yyyy HH:mm',
-        ).format(DateTime.now());
-        final trimmedUsername = username.trim();
-        final rowData = [
-          ctr,
-          trimmedUsername,
-          "$phone",
-          creationDate,
-          0,
-          deviceInfo,
-        ];
+        Map<String, dynamic>? phoneOnlyUser;
+        if (accountsData != null) {
+          for (int i = 0; i < accountsData.length; i++) {
+            if (accountsData[i]['phone']?.toString().trim() == phone) {
+              phoneOnlyUser = accountsData[i];
+              break;
+            }
+          }
+        }
 
-        await SheetsWriter.appendRow(
-          spreadsheetId: _spreadsheetId,
-          serviceAccountJsonAssetPath: _serviceAccountPath,
-          sheetName: _sheetName,
-          rowValues: rowData,
-          range: 'A:F',
-          valueInputOption: 'RAW',
-        );
+        if (phoneOnlyUser != null) {
+          final ctr = await _getNextCtr();
+          final creationDate = DateFormat(
+            'dd/MM/yyyy HH:mm',
+          ).format(DateTime.now());
 
-        _showStatusSnackBar(
-          'Your account has been submitted for verification by Aiyah. Thank you!',
-          isError: false,
-        );
+          final rowData = [
+            ctr,
+            username,
+            phone,
+            creationDate,
+            0,
+            currentDeviceInfo,
+          ];
+
+          await SheetsWriter.appendRow(
+            spreadsheetId: _spreadsheetId,
+            serviceAccountJsonAssetPath: _serviceAccountPath,
+            sheetName: _sheetName,
+            rowValues: rowData,
+            range: 'A:F',
+            valueInputOption: 'RAW',
+          );
+
+          final adminEmail = await _fetchAdminEmail();
+          if (adminEmail != null && adminEmail.isNotEmpty) {
+            await _sendEmailNotification(
+              adminEmail: adminEmail,
+              userName: username,
+              userPhone: phone,
+              deviceBrand: deviceInfo['brand']!,
+              deviceModel: deviceInfo['model']!,
+            );
+          }
+
+          _showStatusSnackBar(
+            'This device is not authorized for your account. Your request has been submitted for authentication. Please wait for approval.',
+          );
+        } else {
+          final ctr = await _getNextCtr();
+          final creationDate = DateFormat(
+            'dd/MM/yyyy HH:mm',
+          ).format(DateTime.now());
+
+          final rowData = [
+            ctr,
+            username,
+            phone,
+            creationDate,
+            1,
+            currentDeviceInfo,
+          ];
+
+          await SheetsWriter.appendRow(
+            spreadsheetId: _spreadsheetId,
+            serviceAccountJsonAssetPath: _serviceAccountPath,
+            sheetName: _sheetName,
+            rowValues: rowData,
+            range: 'A:F',
+            valueInputOption: 'RAW',
+          );
+          widget.onLoginSuccess?.call(username, phone);
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => OrderingScreen()),
+          );
+        }
       }
     } catch (e) {
       _showStatusSnackBar('An error occurred: ${e.toString()}');
@@ -423,11 +699,9 @@ class _LoginScreenState extends State<LoginScreen>
                           },
                         ),
                         const SizedBox(height: 12),
-                        // Wrap phone field with AnimatedBuilder for shake effect
                         AnimatedBuilder(
                           animation: _shakeAnimation,
                           builder: (context, child) {
-                            // Calculate shake offset using sine wave for smooth oscillation
                             final offset =
                                 sin(_shakeAnimation.value * pi * 3) *
                                 (1 - _shakeAnimation.value) *
@@ -464,7 +738,6 @@ class _LoginScreenState extends State<LoginScreen>
                               final phRegex = RegExp(r'^(09\d{9}|\+639\d{9})$');
 
                               if (!phRegex.hasMatch(normalized)) {
-                                // Trigger haptic feedback and shake animation for invalid phone number
                                 WidgetsBinding.instance.addPostFrameCallback((
                                   _,
                                 ) {
