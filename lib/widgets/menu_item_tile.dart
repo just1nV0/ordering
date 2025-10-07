@@ -9,7 +9,7 @@ class MenuItemTile extends StatelessWidget {
   final Function(MenuItem, int)? onAddToCartWithQuantity;
   final bool isAdded;
   final AppColorPalette theme;
-  final int currentQuantity; 
+  final int currentQuantity;
 
   const MenuItemTile({
     Key? key,
@@ -24,121 +24,132 @@ class MenuItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-    onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ViewItemScreen(
-                item: item,
-                theme: theme,
-                isInCart: isAdded,
-  initialQuantity: currentQuantity,
-                onAddToCart: onAddToCartWithQuantity ?? (item, quantity) {
-                  for (int i = 0; i < quantity; i++) {
-                    onAddToCart.call();
-                  }
-                },
-              ),
-            ),
-          );
-    },
-    child:  Container(
-      decoration: BoxDecoration(
-        color: theme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: theme.border,
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            flex: 3,
-            child: Container(
-              decoration: BoxDecoration(
-                color: theme.surfaceVariant,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(8),
-                ),
-              ),
-              child: Icon(
-                Icons.eco_outlined,
-                size: 48,
-                color: theme.primary,
-              ),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ViewItemScreen(
+              item: item,
+              theme: theme,
+              isInCart: isAdded,
+              initialQuantity: currentQuantity,
+              onAddToCart:
+                  onAddToCartWithQuantity ??
+                  (item, quantity) {
+                    for (int i = 0; i < quantity; i++) {
+                      onAddToCart.call();
+                    }
+                  },
             ),
           ),
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: theme.textPrimary,
-                      letterSpacing: 0.2,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.border, width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 3,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: theme.surfaceVariant,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(8),
                   ),
-                  if (item.uom.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      item.uom,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.textTertiary,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '₱${item.price.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: theme.textSecondary,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: onAddToCart,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: isAdded ? theme.primary : theme.surfaceVariant,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: theme.border,
-                              width: 1,
+                ),
+                child: Icon(Icons.eco_outlined, size: 48, color: theme.primary),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              item.name,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: theme.textPrimary,
+                                letterSpacing: 0.2,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          child: Icon(
-                            isAdded ? Icons.check : Icons.add,
-                            color: isAdded ? theme.surface : theme.textTertiary,
-                            size: 18,
+                          if (item.uom.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              item.uom,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: theme.textTertiary,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '₱${item.price.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: theme.textSecondary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        GestureDetector(
+                          onTap: onAddToCart,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: isAdded
+                                  ? theme.primary
+                                  : theme.surfaceVariant,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: theme.border, width: 1),
+                            ),
+                            child: Icon(
+                              isAdded ? Icons.check : Icons.add,
+                              color: isAdded
+                                  ? theme.surface
+                                  : theme.textTertiary,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
-  }
+}

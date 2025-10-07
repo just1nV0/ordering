@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:ordering/screens/ordering_screen.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, exit;
 import 'api_helpers/sqlite/insert_sqlite.dart';
 import 'api_helpers/google_sheets/crud/read_sheets.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:ordering/screens/login_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +47,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
   List<List<Object?>>? _itemNamesData;
   List<List<Object?>>? _pricesData;
   String _loadingMessage = 'Initializing...';
+  bool _isRestricted = false;
 
   @override
   void initState() {
@@ -82,6 +85,127 @@ class _LoadingScreenState extends State<LoadingScreen> {
     }
   }
 
+  Future<bool> _checkUserLogin() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userInfo = prefs.getString('user_info');
+      return userInfo != null;
+    } catch (e) {
+      print('Error checking user login: $e');
+      return false;
+    }
+  }
+
+  Future<void> _checkUserAccess() async {
+    try {
+      setState(() {
+        _loadingMessage = 'Checking user access...';
+      });
+
+      final prefs = await SharedPreferences.getInstance();
+      final userInfoString = prefs.getString('user_info');
+      
+      if (userInfoString == null) {
+        print('No user info found in SharedPreferences');
+        return;
+      }
+
+      final userInfo = jsonDecode(userInfoString);
+      final username = userInfo['username'] ?? '';
+      final phone = userInfo['phone'] ?? '';
+
+      print('Checking access for user: $username, phone: $phone');
+
+      final accountsData = await _sheetsReader.readSheetData(
+        sheetName: 'accounts',
+        range: 'A:Z',
+      );
+
+      if (accountsData == null || accountsData.isEmpty) {
+        print('No accounts data found');
+        return;
+      }
+
+     final headers = accountsData[0].map((e) => e.toString().toLowerCase().trim()).toList();
+      print('Headers found: $headers'); 
+      final usernameIndex = headers.indexOf('name');
+      final phoneIndex = headers.indexOf('phone');
+      final accessTypeIndex = headers.indexOf('access_type');
+      
+      print('Column indices - username: $usernameIndex, phone: $phoneIndex, access_type: $accessTypeIndex'); 
+
+      if (usernameIndex == -1 || phoneIndex == -1 || accessTypeIndex == -1) {
+        print('Required columns not found in accounts sheet');
+        return;
+      }
+
+      for (int i = 1; i < accountsData.length; i++) {
+        final row = accountsData[i];
+        if (row.length > accessTypeIndex) {
+          final rowUsername = row[usernameIndex]?.toString() ?? '';
+          final rowPhone = row[phoneIndex]?.toString() ?? '';
+          
+          if (rowUsername == username && rowPhone == phone) {
+            final accessType = row[accessTypeIndex]?.toString() ?? '0';
+            print('Found user with access_type: $accessType');
+            
+            if (accessType == '2') {
+              setState(() {
+                _isRestricted = true;
+                _loadingMessage = 'Your account has been restricted.\nAccess denied.';
+              });
+              
+              if (mounted) {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (BuildContext context) {
+                    return WillPopScope(
+                      onWillPop: () async => false,
+                      child: AlertDialog(
+                        title: const Text('Access Restricted'),
+                        content: const Text(
+                          'Your account has been restricted from using this app.\n'
+                          'Please contact the administrator for assistance.\n\n'
+                          'The app will close in a seconds.',
+                        ),
+                        actions: const [],
+                      ),
+                    );
+                  },
+                );
+              }
+              
+              await Future.delayed(const Duration(seconds: 10));
+              exit(0);
+            } else if (accessType == '0' || accessType == '1') {
+              print('User has valid access');
+            }
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      print('Error checking user access: $e');
+    }
+  }
+
+  Future<void> _navigateToAppropriateScreen() async {
+    if (!mounted || _isRestricted) return;
+    
+    final isLoggedIn = await _checkUserLogin();
+    
+    if (isLoggedIn) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const OrderingScreen()),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    }
+  }
+
   Future<void> _initApp() async {
     try {
       setState(() {
@@ -110,10 +234,20 @@ class _LoadingScreenState extends State<LoadingScreen> {
       print('Mismatched columns: $mismatchedColumns');
       
       if (!allEqual) {
+        if (mismatchedColumns.contains("accounts")) {
+      // if (allEqual) {
+      //   if (!mismatchedColumns.contains("accounts")) {
+          await _checkUserAccess();
+          if (_isRestricted) {
+            return;
+          }
+        }
+
         setState(() {
           _loadingMessage = 'Loading updated data...';
         });
         final dataInserter = DataInserter();
+        
         if (mismatchedColumns.contains("itemnames")) {
           setState(() {
             _loadingMessage = 'Loading item names...';
@@ -138,6 +272,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
             print('Item names sync completed: $result');
           }
         }
+        
         if (mismatchedColumns.contains("item_price")) {
           setState(() {
             _loadingMessage = 'Loading item prices...';
@@ -174,16 +309,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
       
       await Future.delayed(const Duration(seconds: 3));
 
-      if (mounted) {
-        // Navigator.of(context).pushReplacement(
-        //   MaterialPageRoute(builder: (_) => const OrderingScreen()),
-        // );
-
-        Navigator.push(
-  context,
-  MaterialPageRoute(builder: (context) => const LoginScreen()),
-);
-      }
+      await _navigateToAppropriateScreen();
     } catch (e) {
       print('Error initializing app: $e');
       setState(() {
@@ -192,18 +318,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
       
       await Future.delayed(const Duration(seconds: 3));
       
-      if (mounted) {
-        // Navigator.of(context).pushReplacement(
-        //   MaterialPageRoute(
-        //     builder: (_) => const OrderingScreen(),
-        //   ),
-        // );
-        
-Navigator.push(
-  context,
-  MaterialPageRoute(builder: (context) => const LoginScreen()),
-);
-      }
+      await _navigateToAppropriateScreen();
     }
   }
 
@@ -224,11 +339,16 @@ Navigator.push(
               ),
             ),
             const SizedBox(height: 20),
-            const CircularProgressIndicator(),
+            if (!_isRestricted) const CircularProgressIndicator(),
             const SizedBox(height: 20),
             Text(
               _loadingMessage,
-              style: Theme.of(context).textTheme.bodyLarge,
+              style: _isRestricted
+                  ? Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      )
+                  : Theme.of(context).textTheme.bodyLarge,
               textAlign: TextAlign.center,
             ),
           ],

@@ -1,6 +1,6 @@
 {
   "itemnames": ["ctr", "itemname", "sold_count", "image_path", "UOM"],
-  "last_up": ["itemnames","item_price"],
+  "last_up": ["itemnames","item_price", "accounts"],
   "item_price": ["ctr","prev_price", "curr_price"],
   "itemnames_schem": {
     "ctr": "INTEGER PRIMARY KEY",
@@ -11,7 +11,8 @@
   },
   "last_up_schem": {
     "itemnames": "TEXT",
-    "item_price": "TEXT"
+    "item_price": "TEXT",
+    "accounts": "TEXT"
   },
   "item_price_schem":{
     "ctr": "INTEGER PRIMARY KEY",

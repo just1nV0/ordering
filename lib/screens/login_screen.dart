@@ -6,12 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:ordering/screens/ordering_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_color_palette.dart';
 import '../services/theme_manager.dart';
 import '../api_helpers/google_sheets/crud/write_sheets.dart';
 import '../api_helpers/google_sheets/crud/read_sheets.dart';
 import '../api_helpers/google_sheets/crud/update_sheets.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class LoginScreen extends StatefulWidget {
@@ -42,7 +42,6 @@ class _LoginScreenState extends State<LoginScreen>
       '1uuQtJKa7NngVjHEbV2wsq4BaEOAbKPPeLf2L5NObCcU';
   static const String _serviceAccountPath = 'assets/service_account.json';
   static const String _sheetName = 'accounts';
-  static const String _sysSetupSheetName = 'sys_setup';
 
   @override
   void initState() {
@@ -132,101 +131,6 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Future<Map<String, String>> _getDeviceBrandAndModel() async {
-    final deviceInfoPlugin = DeviceInfoPlugin();
-    try {
-      if (Platform.isAndroid) {
-        final androidInfo = await deviceInfoPlugin.androidInfo;
-        return {'brand': androidInfo.brand, 'model': androidInfo.model};
-      } else if (Platform.isIOS) {
-        final iosInfo = await deviceInfoPlugin.iosInfo;
-        return {'brand': 'Apple', 'model': iosInfo.model};
-      } else {
-        return {'brand': 'Unknown', 'model': 'Unknown'};
-      }
-    } catch (e) {
-      return {'brand': 'Error', 'model': 'Error getting device info'};
-    }
-  }
-
-  Future<String?> _fetchAdminEmail() async {
-    try {
-      final sheetsReader = SheetsReader();
-      await sheetsReader.initialize(
-        spreadsheetId: _spreadsheetId,
-        serviceAccountJsonAssetPath: _serviceAccountPath,
-      );
-
-      final sysSetupData = await sheetsReader.readSheetAsMapList(
-        sheetName: _sysSetupSheetName,
-        range: 'A:Z',
-      );
-
-      if (sysSetupData != null && sysSetupData.isNotEmpty) {
-        for (final record in sysSetupData) {
-          if (record.containsKey('email') && record['email'] != null) {
-            return record['email'].toString().trim();
-          }
-          if (record.containsKey('admin_email') &&
-              record['admin_email'] != null) {
-            return record['admin_email'].toString().trim();
-          }
-        }
-      }
-      return null;
-    } catch (e) {
-      print('Error fetching admin email: $e');
-      return null;
-    }
-  }
-
-  Future<void> _sendEmailNotification({
-    required String adminEmail,
-    required String userName,
-    required String userPhone,
-    required String deviceBrand,
-    required String deviceModel,
-  }) async {
-    try {
-      const String emailJsServiceId = 'service_p47j4x9';
-      const String emailJsTemplateId = 'template_rqplqxb';
-      const String emailJsUserId = 'YOUR_USER_ID';
-
-      final emailData = {
-        'service_id': emailJsServiceId,
-        'template_id': emailJsTemplateId,
-        'user_id': emailJsUserId,
-        'template_params': {
-          'to_email': adminEmail,
-          'user_name': userName,
-          'user_phone': userPhone,
-          'device_brand': deviceBrand,
-          'device_model': deviceModel,
-          'request_time': DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()),
-        },
-      };
-
-      final response = await http.post(
-        Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(emailData),
-      );
-
-      if (response.statusCode == 200) {
-        print('Email notification sent successfully to: $adminEmail');
-        _showStatusSnackBar('Notification email sent to admin', isError: false);
-      } else {
-        print(
-          'Failed to send email notification: ${response.statusCode} - ${response.body}',
-        );
-        _showStatusSnackBar('Failed to send notification email', isError: true);
-      }
-    } catch (e) {
-      print('Error sending email notification: $e');
-      _showStatusSnackBar('Error sending notification email', isError: true);
-    }
-  }
-
   Future<int> _getNextCtr() async {
     try {
       final lastCtr = await SheetsWriter.getLastCtr(
@@ -250,6 +154,27 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  Future<void> _saveUserInfoToPrefs(String username, String phone) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userInfo = {
+        'username': username,
+        'phone': phone,
+      };
+      await prefs.setString('user_info', jsonEncode(userInfo));
+    } catch (e) {
+      print('Error saving user info to SharedPreferences: $e');
+    }
+  }
+
+  Future<void> _navigateToOrderingScreen(String username, String phone) async {
+    await _saveUserInfoToPrefs(username, phone);
+    widget.onLoginSuccess?.call(username, phone);
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => OrderingScreen()),
+    );
+  }
+
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -261,7 +186,6 @@ class _LoginScreenState extends State<LoginScreen>
       final username = _usernameController.text.trim();
       final phone = _phoneController.text.trim();
       final currentDeviceInfo = await _getDeviceInfo();
-      final deviceInfo = await _getDeviceBrandAndModel();
 
       final sheetsReader = SheetsReader();
       await sheetsReader.initialize(
@@ -476,16 +400,10 @@ class _LoginScreenState extends State<LoginScreen>
                 value: username,
               );
 
-              widget.onLoginSuccess?.call(username, phone);
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (context) => OrderingScreen()),
-              );
+              await _navigateToOrderingScreen(username, phone);
             }
           } else {
-            widget.onLoginSuccess?.call(username, phone);
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => OrderingScreen()),
-            );
+            await _navigateToOrderingScreen(username, phone);
           }
         }
       } else {
@@ -523,17 +441,6 @@ class _LoginScreenState extends State<LoginScreen>
             valueInputOption: 'RAW',
           );
 
-          final adminEmail = await _fetchAdminEmail();
-          if (adminEmail != null && adminEmail.isNotEmpty) {
-            await _sendEmailNotification(
-              adminEmail: adminEmail,
-              userName: username,
-              userPhone: phone,
-              deviceBrand: deviceInfo['brand']!,
-              deviceModel: deviceInfo['model']!,
-            );
-          }
-
           _showStatusSnackBar(
             'This device is not authorized for your account. Your request has been submitted for authentication. Please wait for approval.',
           );
@@ -560,10 +467,8 @@ class _LoginScreenState extends State<LoginScreen>
             range: 'A:F',
             valueInputOption: 'RAW',
           );
-          widget.onLoginSuccess?.call(username, phone);
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => OrderingScreen()),
-          );
+          
+          await _navigateToOrderingScreen(username, phone);
         }
       }
     } catch (e) {
