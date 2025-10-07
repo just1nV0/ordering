@@ -233,17 +233,15 @@ class _OrderingScreenState extends State<OrderingScreen> {
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
       ),
-      drawer: _currentIndex == 0
-          ? CustomDrawer(
-              theme: currentTheme,
-              isGridView: isGridView,
-              isDarkMode: isDarkMode,
-              onToggleView: _toggleView,
-              onToggleDarkMode: _toggleDarkMode,
-              onThemeSelector: _showThemeSelector,
-              onRefreshMenu: _refreshMenu,
-            )
-          : null,
+      drawer: CustomDrawer(
+        theme: currentTheme,
+        isGridView: isGridView,
+        isDarkMode: isDarkMode,
+        onToggleView: _toggleView,
+        onToggleDarkMode: _toggleDarkMode,
+        onThemeSelector: _showThemeSelector,
+        onRefreshMenu: _refreshMenu,
+      ),
       body: PageView(
         controller: _pageController,
         onPageChanged: (index) {

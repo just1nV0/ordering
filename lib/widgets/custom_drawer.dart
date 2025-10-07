@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../theme/app_color_palette.dart';
 
 class CustomDrawer extends StatelessWidget {
@@ -21,6 +23,23 @@ class CustomDrawer extends StatelessWidget {
     required this.onRefreshMenu,
   }) : super(key: key);
 
+  Future<Map<String, String>> _getUserInfo() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userInfoString = prefs.getString('user_info');
+      if (userInfoString != null) {
+        final userInfo = jsonDecode(userInfoString);
+        return {
+          'username': userInfo['username'] ?? 'Guest',
+          'phone': userInfo['phone'] ?? '',
+        };
+      }
+    } catch (e) {
+      print('Error fetching user info: $e');
+    }
+    return {'username': 'Guest', 'phone': ''};
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -28,38 +47,77 @@ class CustomDrawer extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          DrawerHeader(
+          Container(
+            height: 120,
             decoration: BoxDecoration(
               color: theme.primary,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundColor: theme.surface,
-                  child: Icon(
-                    Icons.person_outline,
-                    size: 30,
-                    color: theme.primary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Welcome',
-                  style: TextStyle(
-                    color: theme.surface,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: FutureBuilder<Map<String, String>>(
+              future: _getUserInfo(),
+              builder: (context, snapshot) {
+                final username = snapshot.data?['username'] ?? 'Guest';
+                final phone = snapshot.data?['phone'] ?? '';
+                
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: theme.surface,
+                      child: (username.isNotEmpty && username != 'Guest')
+                          ? Text(
+                              username[0].toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                                color: theme.primary,
+                              ),
+                            )
+                          : Icon(
+                              Icons.person_outline,
+                              size: 26,
+                              color: theme.primary,
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            username,
+                            style: TextStyle(
+                              color: theme.surface,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (phone.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              phone,
+                              style: TextStyle(
+                                color: theme.surface.withOpacity(0.8),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
-          _buildDrawerItem(context, Icons.home_outlined, 'Home'),
-          _buildDrawerItem(context, Icons.restaurant_menu_outlined, 'Menu'),
+          // _buildDrawerItem(context, Icons.home_outlined, 'Home'),
+          // _buildDrawerItem(context, Icons.restaurant_menu_outlined, 'Menu'),
           _buildDrawerItem(
             context,
             isGridView ? Icons.view_list_outlined : Icons.grid_view_outlined,
@@ -109,9 +167,17 @@ class CustomDrawer extends StatelessWidget {
               onRefreshMenu();
             }
           ),
-          _buildDrawerItem(context, Icons.history_outlined, 'Order History'),
-          _buildDrawerItem(context, Icons.favorite_outline, 'Favorites'),
-          _buildDrawerItem(context, Icons.person_outline, 'Profile'),
+          // _buildDrawerItem(context, Icons.history_outlined, 'Order History', 
+          //   onTap: () {
+           
+          // OrderHistoryScreen(theme: theme);
+          //   }),
+          // _buildDrawerItem(context, Icons.favorite_outline, 'Favorites'),
+          // _buildDrawerItem(context, Icons.person_outline, 'Profile', 
+          //  onTap: () {
+           
+          // OrderHistoryScreen(theme: theme);
+          //   }),
           Divider(color: theme.border, height: 32),
           _buildDrawerItem(context, Icons.settings_outlined, 'Settings'),
           _buildDrawerItem(context, Icons.help_outline, 'Help & Support'),

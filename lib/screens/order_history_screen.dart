@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../models/menu_item.dart';
 import '../models/cart_item.dart';
 import '../theme/app_color_palette.dart';
@@ -23,14 +25,7 @@ class OrderItem {
   });
 }
 
-enum OrderStatus {
-  pending,
-  confirmed,
-  preparing,
-  ready,
-  completed,
-  cancelled,
-}
+enum OrderStatus { pending, confirmed, preparing, ready, completed, cancelled }
 
 extension OrderStatusExtension on OrderStatus {
   String get displayName {
@@ -71,10 +66,7 @@ extension OrderStatusExtension on OrderStatus {
 class OrderHistoryScreen extends StatefulWidget {
   final AppColorPalette theme;
 
-  const OrderHistoryScreen({
-    Key? key,
-    required this.theme,
-  }) : super(key: key);
+  const OrderHistoryScreen({Key? key, required this.theme}) : super(key: key);
 
   @override
   State<OrderHistoryScreen> createState() => _OrderHistoryScreenState();
@@ -83,15 +75,15 @@ class OrderHistoryScreen extends StatefulWidget {
 class _OrderHistoryScreenState extends State<OrderHistoryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final String _userName = 'Kim Viola';
-  final String _userEmail = 'kim.pepito@fakemail.com';
+  String _userName = '';
+  String _userPhone = '';
 
   final Map<String, List<OrderStatus>> _categories = {
     'Pending': [OrderStatus.pending],
     'Confirmed': [
       OrderStatus.confirmed,
       OrderStatus.preparing,
-      OrderStatus.ready
+      OrderStatus.ready,
     ],
     'Recent': [OrderStatus.completed, OrderStatus.cancelled],
   };
@@ -103,6 +95,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: _categories.length, vsync: this);
+    _loadUserInfo();
     _loadOrderHistory();
   }
 
@@ -110,6 +103,18 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUserInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userInfoString = prefs.getString('user_info');
+    if (userInfoString != null) {
+      final userInfo = jsonDecode(userInfoString);
+      setState(() {
+        _userName = userInfo['username'] ?? '';
+        _userPhone = userInfo['phone'] ?? '';
+      });
+    }
   }
 
   Future<void> _loadOrderHistory() async {
@@ -122,53 +127,89 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
   }
 
   List<OrderItem> _generateMockOrders() {
-    final m1 = MenuItem(id: '1', name: 'Chicken Adobo', price: 150, uom: 'serving', image: '');
-    final m2 = MenuItem(id: '2', name: 'Pork Sisig',    price: 180, uom: 'serving', image: '');
-    final m3 = MenuItem(id: '3', name: 'Iced Tea',      price:  50, uom: 'glass',   image: '');
+    final m1 = MenuItem(
+      id: '1',
+      name: 'Chicken Adobo',
+      price: 150,
+      uom: 'serving',
+      image: '',
+    );
+    final m2 = MenuItem(
+      id: '2',
+      name: 'Pork Sisig',
+      price: 180,
+      uom: 'serving',
+      image: '',
+    );
+    final m3 = MenuItem(
+      id: '3',
+      name: 'Iced Tea',
+      price: 50,
+      uom: 'glass',
+      image: '',
+    );
 
     return [
       OrderItem(
-          id: 'ORD-001',
-          items: [CartItem(menuItem: m1, quantity: 2), CartItem(menuItem: m3, quantity: 1)],
-          orderDate: DateTime.now().subtract(const Duration(hours: 2)),
-          total: 350,
-          status: OrderStatus.completed,
-          due: 0),
+        id: 'ORD-001',
+        items: [
+          CartItem(menuItem: m1, quantity: 2),
+          CartItem(menuItem: m3, quantity: 1),
+        ],
+        orderDate: DateTime.now().subtract(const Duration(hours: 2)),
+        total: 350,
+        status: OrderStatus.completed,
+        due: 0,
+      ),
       OrderItem(
-          id: 'ORD-002',
-          items: [CartItem(menuItem: m2, quantity: 1), CartItem(menuItem: m3, quantity: 2)],
-          orderDate: DateTime.now().subtract(const Duration(days: 1)),
-          total: 280,
-          status: OrderStatus.completed,
-          due: 0),
+        id: 'ORD-002',
+        items: [
+          CartItem(menuItem: m2, quantity: 1),
+          CartItem(menuItem: m3, quantity: 2),
+        ],
+        orderDate: DateTime.now().subtract(const Duration(days: 1)),
+        total: 280,
+        status: OrderStatus.completed,
+        due: 0,
+      ),
       OrderItem(
-          id: 'ORD-003',
-          items: [CartItem(menuItem: m1, quantity: 1), CartItem(menuItem: m2, quantity: 1)],
-          orderDate: DateTime.now().subtract(const Duration(minutes: 30)),
-          total: 330,
-          status: OrderStatus.ready,
-          due: 330),
+        id: 'ORD-003',
+        items: [
+          CartItem(menuItem: m1, quantity: 1),
+          CartItem(menuItem: m2, quantity: 1),
+        ],
+        orderDate: DateTime.now().subtract(const Duration(minutes: 30)),
+        total: 330,
+        status: OrderStatus.ready,
+        due: 330,
+      ),
       OrderItem(
-          id: 'ORD-004',
-          items: [CartItem(menuItem: m1, quantity: 3)],
-          orderDate: DateTime.now().subtract(const Duration(days: 2)),
-          total: 450,
-          status: OrderStatus.completed,
-          due: 0),
+        id: 'ORD-004',
+        items: [CartItem(menuItem: m1, quantity: 3)],
+        orderDate: DateTime.now().subtract(const Duration(days: 2)),
+        total: 450,
+        status: OrderStatus.completed,
+        due: 0,
+      ),
       OrderItem(
-          id: 'ORD-005',
-          items: [CartItem(menuItem: m1, quantity: 4)],
-          orderDate: DateTime.now().subtract(const Duration(minutes: 10)),
-          total: 600,
-          status: OrderStatus.pending,
-          due: 600),
+        id: 'ORD-005',
+        items: [CartItem(menuItem: m1, quantity: 4)],
+        orderDate: DateTime.now().subtract(const Duration(minutes: 10)),
+        total: 600,
+        status: OrderStatus.pending,
+        due: 600,
+      ),
       OrderItem(
-          id: 'ORD-006',
-          items: [CartItem(menuItem: m2, quantity: 5), CartItem(menuItem: m3, quantity: 2)],
-          orderDate: DateTime.now().subtract(const Duration(hours: 1)),
-          total: 1000,
-          status: OrderStatus.confirmed,
-          due: 1000),
+        id: 'ORD-006',
+        items: [
+          CartItem(menuItem: m2, quantity: 5),
+          CartItem(menuItem: m3, quantity: 2),
+        ],
+        orderDate: DateTime.now().subtract(const Duration(hours: 1)),
+        total: 1000,
+        status: OrderStatus.confirmed,
+        due: 1000,
+      ),
     ];
   }
 
@@ -182,8 +223,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final totalDue =
-        orders.fold<double>(0, (sum, order) => sum + order.due);
+    final totalDue = orders.fold<double>(0, (sum, order) => sum + order.due);
 
     return Scaffold(
       backgroundColor: widget.theme.background,
@@ -192,9 +232,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
         color: widget.theme.primary,
         child: isLoading
             ? Center(
-                child: CircularProgressIndicator(
-                  color: widget.theme.primary,
-                ),
+                child: CircularProgressIndicator(color: widget.theme.primary),
               )
             : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -208,7 +246,9 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
                           radius: 30,
                           backgroundColor: widget.theme.primary,
                           child: Text(
-                            _userName[0],
+                            _userName.isNotEmpty
+                                ? _userName[0].toUpperCase()
+                                : 'U',
                             style: TextStyle(
                               color: widget.theme.surface,
                               fontSize: 24,
@@ -221,7 +261,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _userName,
+                              _userName.isNotEmpty ? _userName : 'User',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
@@ -229,14 +269,14 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
                               ),
                             ),
                             Text(
-                              _userEmail,
+                              _userPhone.isNotEmpty ? _userPhone : '',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: widget.theme.textSecondary,
                               ),
                             ),
                           ],
-                        )
+                        ),
                       ],
                     ),
                   ),
@@ -302,8 +342,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
                       controller: _tabController,
                       children: _categories.entries.map((entry) {
                         final filtered = orders
-                            .where((o) =>
-                                entry.value.contains(o.status))
+                            .where((o) => entry.value.contains(o.status))
                             .toList();
                         if (filtered.isEmpty) {
                           return Center(
@@ -318,8 +357,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
                         return ListView.builder(
                           padding: const EdgeInsets.all(16),
                           itemCount: filtered.length,
-                          itemBuilder: (_, i) =>
-                              _buildOrderCard(filtered[i]),
+                          itemBuilder: (_, i) => _buildOrderCard(filtered[i]),
                         );
                       }).toList(),
                     ),
@@ -335,8 +373,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: c.surface,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: () {},
         borderRadius: BorderRadius.circular(12),
@@ -358,14 +395,13 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color: order.status
-                          .getColor(c)
-                          .withOpacity(0.1),
+                      color: order.status.getColor(c).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: order.status.getColor(c)),
+                      border: Border.all(color: order.status.getColor(c)),
                     ),
                     child: Text(
                       order.status.displayName,
@@ -375,27 +411,29 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
                         color: order.status.getColor(c),
                       ),
                     ),
-                  )
+                  ),
                 ],
               ),
 
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Icon(Icons.access_time,
-                      size: 14, color: c.textSecondary),
+                  Icon(Icons.access_time, size: 14, color: c.textSecondary),
                   const SizedBox(width: 4),
-                  Text(_formatDate(order.orderDate),
-                      style: TextStyle(
-                          fontSize: 12, color: c.textSecondary)),
+                  Text(
+                    _formatDate(order.orderDate),
+                    style: TextStyle(fontSize: 12, color: c.textSecondary),
+                  ),
                   const SizedBox(width: 16),
-                  Icon(Icons.shopping_bag_outlined,
-                      size: 14, color: c.textSecondary),
+                  Icon(
+                    Icons.shopping_bag_outlined,
+                    size: 14,
+                    color: c.textSecondary,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     '${order.items.length} item${order.items.length > 1 ? 's' : ''}',
-                    style: TextStyle(
-                        fontSize: 12, color: c.textSecondary),
+                    style: TextStyle(fontSize: 12, color: c.textSecondary),
                   ),
                 ],
               ),
@@ -405,20 +443,17 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
                 order.items
                     .map((it) => '${it.quantity}x ${it.menuItem.name}')
                     .join(', '),
-                style: TextStyle(
-                    fontSize: 14, color: c.textSecondary),
+                style: TextStyle(fontSize: 14, color: c.textSecondary),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
 
               const SizedBox(height: 12),
               Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Total: ₱${order.total.toStringAsFixed(2)}',

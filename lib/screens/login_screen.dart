@@ -157,10 +157,7 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _saveUserInfoToPrefs(String username, String phone) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final userInfo = {
-        'username': username,
-        'phone': phone,
-      };
+      final userInfo = {'username': username, 'phone': phone};
       await prefs.setString('user_info', jsonEncode(userInfo));
     } catch (e) {
       print('Error saving user info to SharedPreferences: $e');
@@ -216,7 +213,6 @@ class _LoginScreenState extends State<LoginScreen>
       if (existingUser != null) {
         final sheetUsername = existingUser['name']?.toString() ?? '';
         final accessType = existingUser['access_type']?.toString() ?? '0';
-
         if (accessType == '0') {
           if (sheetUsername.toLowerCase() != username.toLowerCase()) {
             final bool? wantToChange = await showDialog<bool>(
@@ -467,7 +463,7 @@ class _LoginScreenState extends State<LoginScreen>
             range: 'A:F',
             valueInputOption: 'RAW',
           );
-          
+
           await _navigateToOrderingScreen(username, phone);
         }
       }
