@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:ordering/api_helpers/google_sheets/crud/read_sheets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/cart_item.dart';
 import '../theme/app_color_palette.dart';
 import '../api_helpers/google_sheets/crud/write_sheets.dart';
@@ -47,100 +51,129 @@ class _CartWidgetState extends State<CartWidget> {
     widget.onCartUpdated?.call(_cartItems);
   }
 
-  Future<void> _processCheckout() async {
-    if (_cartItems.isEmpty || _isProcessingCheckout) return;
+ Future<void> _processCheckout() async {
+  if (_cartItems.isEmpty || _isProcessingCheckout) return;
 
-    setState(() {
-      _isProcessingCheckout = true;
-    });
+  setState(() {
+    _isProcessingCheckout = true;
+  });
 
-    try {
-      // Debug: Print configuration
-      print('🔍 Debug Info:');
-      print('   Spreadsheet ID: $_spreadsheetId');
-      print('   Service Account Path: $_serviceAccountAssetPath');
-      print('   Cart items count: ${_cartItems.length}');
+  try {
+    print('🔍 Debug Info:');
+    print('   Spreadsheet ID: $_spreadsheetId');
+    print('   Service Account Path: $_serviceAccountAssetPath');
+    print('   Cart items count: ${_cartItems.length}');
 
-      final DateTime now = DateTime.now();
-      final String formattedDateTime = 
-          '${now.day}/${now.month}/${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final DateTime now = DateTime.now();
+    final String formattedDateTime = 
+        '${now.day}/${now.month}/${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final sheetsReader = SheetsReader();
+    await sheetsReader.initialize(
+      spreadsheetId: _spreadsheetId,
+      serviceAccountJsonAssetPath: _serviceAccountAssetPath,
+    );
 
-      // Try to create the sheet if it doesn't exist
-      try {
-        await SheetsWriter.createSheetIfNotExists(
-          spreadsheetId: _spreadsheetId,
-          serviceAccountJsonAssetPath: _serviceAccountAssetPath,
-          sheetName: 'orders',
-        );
-        print('✅ Sheet verification/creation completed');
-      } catch (e) {
-        print('⚠️ Sheet creation check failed: $e');
-      }
+    final existingOrders = await sheetsReader.readSheetAsMapList(
+      sheetName: 'orders',
+      range: 'A:Z',
+      firstRowIsHeader: true,
+    );
 
-      // Process each cart item as a separate row
-      for (int i = 0; i < _cartItems.length; i++) {
-        final CartItem cartItem = _cartItems[i];
-        if (cartItem.quantity > 0) {
-          final List<Object?> rowValues = [
-            formattedDateTime,           // Date and Time
-            cartItem.quantity,           // Quantity
-            cartItem.menuItem.id,        // CTR (item ID)
-            cartItem.menuItem.name,      // Item name (for reference)
-            cartItem.menuItem.price,     // Price per unit
-            cartItem.totalPrice,         // Total per item
-          ];
+    int nextCtr = 1;
+    if (existingOrders != null && existingOrders.isNotEmpty) {
+      final ctrValues = existingOrders
+          .where((row) => row.containsKey('ctr') && row['ctr'] != null)
+          .map((row) => int.tryParse(row['ctr'].toString()) ?? 0)
+          .toList();
 
-          print('📝 Inserting row ${i + 1}: $rowValues');
-
-          await SheetsWriter.appendRow(
-            spreadsheetId: _spreadsheetId,
-            serviceAccountJsonAssetPath: _serviceAccountAssetPath,
-            sheetName: 'orders',
-            rowValues: rowValues,
-          );
-
-          print('✅ Successfully inserted row ${i + 1}');
-        }
-      }
-
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Order placed successfully!'),
-            backgroundColor: widget.theme.success,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-
-      // Clear the cart after successful submission
-      setState(() => _cartItems.clear());
-      widget.onCheckoutComplete?.call();
-      
-    } catch (e) {
-      // Enhanced error logging
-      print('❌ Checkout failed: $e');
-      print('Stack trace: ${StackTrace.current}');
-      
-      // Handle error
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Checkout failed: ${e.toString()}'),
-            backgroundColor: widget.theme.error,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessingCheckout = false;
-        });
+      if (ctrValues.isNotEmpty) {
+        nextCtr = ctrValues.reduce((a, b) => a > b ? a : b) + 1;
       }
     }
+
+    final prefs = await SharedPreferences.getInstance();
+    final userInfoString = prefs.getString('user_info');
+    Map<String, dynamic> userInfo = {};
+    if (userInfoString != null) {
+      try {
+        userInfo = jsonDecode(userInfoString);
+      } catch (e) {
+        print('⚠️ Failed to parse user_info: $e');
+      }
+    }
+
+    final customerId = userInfo['ctr'] ?? '';
+    try {
+      await SheetsWriter.createSheetIfNotExists(
+        spreadsheetId: _spreadsheetId,
+        serviceAccountJsonAssetPath: _serviceAccountAssetPath,
+        sheetName: 'orders',
+      );
+      print('✅ Sheet verification/creation completed');
+    } catch (e) {
+      print('⚠️ Sheet creation check failed: $e');
+    }
+
+    for (int i = 0; i < _cartItems.length; i++) {
+      final CartItem cartItem = _cartItems[i];
+      if (cartItem.quantity <= 0) continue;
+
+      final List<Object?> rowValues = [
+        nextCtr++, 
+        formattedDateTime,  
+        cartItem.quantity,  
+        cartItem.menuItem.id,
+        cartItem.menuItem.name,
+        customerId,  
+        cartItem.menuItem.price,
+        cartItem.totalPrice,
+      ];
+
+      print('📝 Inserting row ${i + 1}: $rowValues');
+
+      await SheetsWriter.appendRow(
+        spreadsheetId: _spreadsheetId,
+        serviceAccountJsonAssetPath: _serviceAccountAssetPath,
+        sheetName: 'orders',
+        rowValues: rowValues,
+      );
+
+      print('✅ Successfully inserted row ${i + 1}');
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Order placed successfully!'),
+          backgroundColor: widget.theme.success,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+
+    setState(() => _cartItems.clear());
+    widget.onCheckoutComplete?.call();
+
+  } catch (e) {
+    print('❌ Checkout failed: $e');
+    print('Stack trace: ${StackTrace.current}');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Checkout failed: ${e.toString()}'),
+          backgroundColor: widget.theme.error,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isProcessingCheckout = false;
+      });
+    }
   }
+}
 
   @override
   Widget build(BuildContext context) {

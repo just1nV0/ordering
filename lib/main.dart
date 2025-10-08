@@ -126,26 +126,42 @@ class _LoadingScreenState extends State<LoadingScreen> {
         return;
       }
 
-     final headers = accountsData[0].map((e) => e.toString().toLowerCase().trim()).toList();
+      final headers = accountsData[0].map((e) => e.toString().toLowerCase().trim()).toList();
       print('Headers found: $headers'); 
       final usernameIndex = headers.indexOf('name');
       final phoneIndex = headers.indexOf('phone');
       final accessTypeIndex = headers.indexOf('access_type');
+      final ctrIndex = headers.indexOf('ctr');
       
-      print('Column indices - username: $usernameIndex, phone: $phoneIndex, access_type: $accessTypeIndex'); 
+      print('Column indices - username: $usernameIndex, phone: $phoneIndex, access_type: $accessTypeIndex, ctr: $ctrIndex'); 
 
-      if (usernameIndex == -1 || phoneIndex == -1 || accessTypeIndex == -1) {
-        print('Required columns not found in accounts sheet');
+      if (usernameIndex == -1 || phoneIndex == -1 || accessTypeIndex == -1 || ctrIndex == -1) {
+        print('Required columns (name, phone, access_type, ctr) not found in accounts sheet');
         return;
       }
 
       for (int i = 1; i < accountsData.length; i++) {
         final row = accountsData[i];
-        if (row.length > accessTypeIndex) {
+
+        final maxIndex = [usernameIndex, phoneIndex, accessTypeIndex, ctrIndex].reduce((a, b) => a > b ? a : b);
+
+        if (row.length > maxIndex) {
           final rowUsername = row[usernameIndex]?.toString() ?? '';
           final rowPhone = row[phoneIndex]?.toString() ?? '';
           
           if (rowUsername == username && rowPhone == phone) {
+            final userCtr = row[ctrIndex]?.toString();
+            if (userCtr != null && userCtr.isNotEmpty) {
+              print('Found user ctr: $userCtr');
+              final Map<String, dynamic> updatedUserInfo = Map.from(userInfo);
+              updatedUserInfo['ctr'] = userCtr;
+              final updatedUserInfoString = jsonEncode(updatedUserInfo);
+              await prefs.setString('user_info', updatedUserInfoString);
+              print('Updated user_info in SharedPreferences with ctr: $updatedUserInfoString');
+            } else {
+              print('Warning: Found user but ctr column is empty or null.');
+            }
+            
             final accessType = row[accessTypeIndex]?.toString() ?? '0';
             print('Found user with access_type: $accessType');
             
@@ -167,7 +183,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
                         content: const Text(
                           'Your account has been restricted from using this app.\n'
                           'Please contact the administrator for assistance.\n\n'
-                          'The app will close in a seconds.',
+                          'The app will close in a few seconds.',
                         ),
                         actions: const [],
                       ),
@@ -235,8 +251,6 @@ class _LoadingScreenState extends State<LoadingScreen> {
       
       if (!allEqual) {
         if (mismatchedColumns.contains("accounts")) {
-      // if (allEqual) {
-      //   if (!mismatchedColumns.contains("accounts")) {
           await _checkUserAccess();
           if (_isRestricted) {
             return;
@@ -304,6 +318,10 @@ class _LoadingScreenState extends State<LoadingScreen> {
           _loadingMessage = 'Finalizing...';
         });
       } else {
+        await _checkUserAccess();
+        if (_isRestricted) {
+          return;
+        }
         print('Data is up to date, skipping fetch and insert operations');
       }
       
