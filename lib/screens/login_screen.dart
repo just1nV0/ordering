@@ -157,8 +157,58 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _saveUserInfoToPrefs(String username, String phone) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final userInfo = {'username': username, 'phone': phone};
+      final sheetsReader = SheetsReader();
+      await sheetsReader.initialize(
+        spreadsheetId: _spreadsheetId,
+        serviceAccountJsonAssetPath: _serviceAccountPath,
+      );
+
+      final accountsData = await sheetsReader.readSheetData(
+        sheetName: _sheetName,
+        range: 'A:Z',
+      );
+
+      String? userCtr;
+
+      if (accountsData != null && accountsData.isNotEmpty) {
+        final headers = accountsData[0]
+            .map((e) => e.toString().toLowerCase().trim())
+            .toList();
+        final usernameIndex = headers.indexOf('name');
+        final phoneIndex = headers.indexOf('phone');
+        final ctrIndex = headers.indexOf('ctr');
+
+        if (usernameIndex != -1 && phoneIndex != -1 && ctrIndex != -1) {
+          for (int i = 1; i < accountsData.length; i++) {
+            final row = accountsData[i];
+            final maxIndex = [
+              usernameIndex,
+              phoneIndex,
+              ctrIndex,
+            ].reduce((a, b) => a > b ? a : b);
+
+            if (row.length > maxIndex) {
+              final rowUsername = row[usernameIndex]?.toString() ?? '';
+              final rowPhone = row[phoneIndex]?.toString() ?? '';
+
+              if (rowUsername == username && rowPhone == phone) {
+                userCtr = row[ctrIndex]?.toString();
+                print('Found user ctr: $userCtr');
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      final userInfo = {
+        'username': username,
+        'phone': phone,
+        if (userCtr != null && userCtr.isNotEmpty) 'ctr': userCtr,
+      };
+
       await prefs.setString('user_info', jsonEncode(userInfo));
+      print('Saved user info to SharedPreferences: ${jsonEncode(userInfo)}');
     } catch (e) {
       print('Error saving user info to SharedPreferences: $e');
     }

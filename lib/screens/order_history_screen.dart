@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:intl/intl.dart';
 import '../models/menu_item.dart';
 import '../models/cart_item.dart';
 import '../theme/app_color_palette.dart';
+import '../api_helpers/google_sheets/crud/read_sheets.dart';
 
 class OrderItem {
   final String id;
@@ -77,6 +79,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
   late TabController _tabController;
   String _userName = '';
   String _userPhone = '';
+  String _customerId = '';
 
   final Map<String, List<OrderStatus>> _categories = {
     'Pending': [OrderStatus.pending],
@@ -90,6 +93,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
 
   List<OrderItem> orders = [];
   bool isLoading = true;
+  final SheetsReader _sheetsReader = SheetsReader();
 
   @override
   void initState() {
@@ -113,17 +117,177 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
       setState(() {
         _userName = userInfo['username'] ?? '';
         _userPhone = userInfo['phone'] ?? '';
+        if (userInfo.containsKey('ctr') && userInfo['ctr'] != null) {
+          _customerId = userInfo['ctr'].toString();
+        }
       });
     }
   }
 
   Future<void> _loadOrderHistory() async {
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() {
-      orders = _generateMockOrders()
-        ..sort((a, b) => b.orderDate.compareTo(a.orderDate));
-      isLoading = false;
-    });
+    setState(() => isLoading = true);
+
+    try {
+      // Fetch orders from Google Sheets
+      final fetchedOrders = await _fetchOrdersFromSheet();
+      
+      setState(() {
+        orders = fetchedOrders
+          ..sort((a, b) => b.orderDate.compareTo(a.orderDate));
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading orders: $e');
+      // Fallback to mock data if fetch fails
+      setState(() {
+        orders = _generateMockOrders()
+          ..sort((a, b) => b.orderDate.compareTo(a.orderDate));
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<List<OrderItem>> _fetchOrdersFromSheet() async {
+    if (_customerId.isEmpty) {
+      print('No customer ID available');
+      return [];
+    }
+
+    try {
+      // Get today's date in the format used in the sheet (MM/dd/yyyy)
+      final today = DateTime.now();
+      final dateFormatter = DateFormat('M/d/yyyy');
+      final todayDateString = dateFormatter.format(today);
+
+      // Fetch all data from the orders sheet
+      final ordersData = await _sheetsReader.readSheetAsMapList(
+        sheetName: 'orders',
+        range: 'A:I',
+        firstRowIsHeader: true,
+      );
+
+      if (ordersData == null || ordersData.isEmpty) {
+        print('No orders data found in sheet');
+        return [];
+      }
+      // Filter orders by customer_id and today's date
+      final filteredOrders = ordersData.where((order) {
+        final orderCustomerId = order['customer_id']?.toString() ?? '';
+        if (orderCustomerId != _customerId) return false;
+
+        final orderDateString = order['date']?.toString() ?? '';
+        if (orderDateString.isEmpty) return false;
+
+        try {
+          final datePart = orderDateString.split(' ').first;
+          final orderDate = DateFormat('M/d/yyyy').parse(datePart);
+          final orderDateFormatted = dateFormatter.format(orderDate);
+          return orderDateFormatted == todayDateString;
+        } catch (e) {
+          return false;
+        }
+      }).toList();
+
+      // Group orders by order ID (ctr)
+      Map<String, List<Map<String, dynamic>>> groupedOrders = {};
+      for (var order in filteredOrders) {
+        final orderId = order['ctr']?.toString() ?? '';
+        if (!groupedOrders.containsKey(orderId)) {
+          groupedOrders[orderId] = [];
+        }
+        groupedOrders[orderId]!.add(order);
+      }
+
+      // Convert to OrderItem objects
+      List<OrderItem> orderItems = [];
+      for (var entry in groupedOrders.entries) {
+        final orderId = entry.key;
+        final orderLines = entry.value;
+
+        if (orderLines.isEmpty) continue;
+
+        // Parse order date with time
+        DateTime orderDate;
+        try {
+          final dateTimeString = orderLines.first['date']?.toString() ?? '';
+          orderDate = DateFormat('M/d/yyyy HH:mm').parse(dateTimeString);
+        } catch (e) {
+          orderDate = DateTime.now();
+        }
+
+        // Parse order status
+        final statusString = orderLines.first['order_status']?.toString().toLowerCase() ?? 'pending';
+        OrderStatus status = OrderStatus.pending;
+        if (statusString.contains('confirm')) {
+          status = OrderStatus.confirmed;
+        } else if (statusString.contains('prepar')) {
+          status = OrderStatus.preparing;
+        } else if (statusString.contains('ready')) {
+          status = OrderStatus.ready;
+        } else if (statusString.contains('complet')) {
+          status = OrderStatus.completed;
+        } else if (statusString.contains('cancel')) {
+          status = OrderStatus.cancelled;
+        }
+
+        // Create CartItems from order lines
+        List<CartItem> items = [];
+        double total = 0.0;
+
+        for (var line in orderLines) {
+          final itemName = line['itemname']?.toString() ?? 'Unknown Item';
+          final qty = _parseDouble(line['qty']);
+          final price = _parseDouble(line['price']);
+          final totalPrice = _parseDouble(line['total_price']);
+
+          final menuItem = MenuItem(
+            id: line['item_ctr']?.toString() ?? '',
+            name: itemName,
+            price: price,
+            uom: 'serving',
+            image: '',
+          );
+
+          items.add(CartItem(menuItem: menuItem, quantity: qty.toInt()));
+          total += totalPrice;
+        }
+
+        // Calculate due amount (pending/confirmed orders have due amount)
+        double due = 0.0;
+        if (status == OrderStatus.pending || 
+            status == OrderStatus.confirmed || 
+            status == OrderStatus.preparing || 
+            status == OrderStatus.ready) {
+          due = total;
+        }
+
+        orderItems.add(OrderItem(
+          id: orderId,
+          items: items,
+          orderDate: orderDate,
+          total: total,
+          status: status,
+          due: due,
+        ));
+      }
+
+      print('Fetched ${orderItems.length} orders for customer $_customerId');
+      return orderItems;
+
+    } catch (e) {
+      print('Error fetching orders from sheet: $e');
+      return [];
+    }
+  }
+
+  double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) {
+      return double.tryParse(value) ?? 0.0;
+    }
+    return 0.0;
   }
 
   List<OrderItem> _generateMockOrders() {
@@ -184,31 +348,12 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen>
         due: 330,
       ),
       OrderItem(
-        id: 'ORD-004',
-        items: [CartItem(menuItem: m1, quantity: 3)],
-        orderDate: DateTime.now().subtract(const Duration(days: 2)),
-        total: 450,
-        status: OrderStatus.completed,
-        due: 0,
-      ),
-      OrderItem(
         id: 'ORD-005',
         items: [CartItem(menuItem: m1, quantity: 4)],
         orderDate: DateTime.now().subtract(const Duration(minutes: 10)),
         total: 600,
         status: OrderStatus.pending,
         due: 600,
-      ),
-      OrderItem(
-        id: 'ORD-006',
-        items: [
-          CartItem(menuItem: m2, quantity: 5),
-          CartItem(menuItem: m3, quantity: 2),
-        ],
-        orderDate: DateTime.now().subtract(const Duration(hours: 1)),
-        total: 1000,
-        status: OrderStatus.confirmed,
-        due: 1000,
       ),
     ];
   }

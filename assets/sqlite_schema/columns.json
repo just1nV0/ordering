@@ -2,6 +2,7 @@
   "itemnames": ["ctr", "itemname", "sold_count", "image_path", "UOM"],
   "last_up": ["itemnames","item_price", "accounts"],
   "item_price": ["ctr","prev_price", "curr_price"],
+  "my_orders": ["ctr", "date","qty", "item_ctr", "itemname", "customer_id", "price", "total_price", "order_status"],
   "itemnames_schem": {
     "ctr": "INTEGER PRIMARY KEY",
     "itemname": "TEXT NOT NULL",
@@ -18,5 +19,16 @@
     "ctr": "INTEGER PRIMARY KEY",
     "prev_price": "TEXT",
     "curr_price": "TEXT"
+  },
+  "my_orders_schem": {
+    "ctr": "INTEGER PRIMARY KEY",
+    "date": "TEXT NOT NULL",
+    "qty": "INTEGER NOT NULL",
+    "item_ctr": "INTEGER NOT NULL",
+    "itemname": "TEXT NOT NULL",
+    "customer_id": "TEXT NOT NULL",
+    "price": "TEXT NOT NULL",
+    "total_price": "TEXT NOT NULL",
+    "order_status": "TEXT NOT NULL"
   }
 }

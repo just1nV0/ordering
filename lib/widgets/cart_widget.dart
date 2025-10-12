@@ -1,17 +1,18 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:ordering/api_helpers/google_sheets/crud/read_sheets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/cart_item.dart';
 import '../theme/app_color_palette.dart';
 import '../api_helpers/google_sheets/crud/write_sheets.dart';
+import 'loading_dialog.dart'; 
 
 class CartWidget extends StatefulWidget {
   final AppColorPalette theme;
   final List<CartItem> cartItems;
   final VoidCallback? onCheckoutComplete;
   final Function(List<CartItem>)? onCartUpdated;
+  final Function(int)? onNavigateToTab; // NEW: Callback to navigate to specific tab
 
   const CartWidget({
     Key? key,
@@ -19,6 +20,7 @@ class CartWidget extends StatefulWidget {
     required this.cartItems,
     this.onCheckoutComplete,
     this.onCartUpdated,
+    this.onNavigateToTab, // NEW: Added parameter
   }) : super(key: key);
 
   @override
@@ -28,7 +30,11 @@ class CartWidget extends StatefulWidget {
 class _CartWidgetState extends State<CartWidget> {
   late List<CartItem> _cartItems;
   bool _isProcessingCheckout = false;
-  static const String _spreadsheetId = '1uuQtJKa7NngVjHEbV2wsq4BaEOAbKPPeLf2L5NObCcU';
+  CheckoutLoadingDialog? _loadingDialog;
+  GlobalKey<CheckoutLoadingDialogState>? _loadingDialogKey;
+  
+  static const String _spreadsheetId =
+      '1uuQtJKa7NngVjHEbV2wsq4BaEOAbKPPeLf2L5NObCcU';
   static const String _serviceAccountAssetPath = 'assets/service_account.json';
 
   @override
@@ -43,6 +49,8 @@ class _CartWidgetState extends State<CartWidget> {
   double get total => subtotal + tax;
 
   void _updateQuantity(int index, int newQuantity) {
+    if (_isProcessingCheckout) return;
+    
     if (newQuantity <= 0) {
       setState(() => _cartItems.removeAt(index));
     } else {
@@ -51,129 +59,153 @@ class _CartWidgetState extends State<CartWidget> {
     widget.onCartUpdated?.call(_cartItems);
   }
 
- Future<void> _processCheckout() async {
-  if (_cartItems.isEmpty || _isProcessingCheckout) return;
+  void _navigateToAccountsTab() {
+    widget.onNavigateToTab?.call(3);
+  }
 
-  setState(() {
-    _isProcessingCheckout = true;
-  });
+  Future<void> _processCheckout() async {
+    if (_cartItems.isEmpty || _isProcessingCheckout) return;
 
-  try {
-    print('🔍 Debug Info:');
-    print('   Spreadsheet ID: $_spreadsheetId');
-    print('   Service Account Path: $_serviceAccountAssetPath');
-    print('   Cart items count: ${_cartItems.length}');
+    setState(() {
+      _isProcessingCheckout = true;
+    });
 
-    final DateTime now = DateTime.now();
-    final String formattedDateTime = 
-        '${now.day}/${now.month}/${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    final sheetsReader = SheetsReader();
-    await sheetsReader.initialize(
-      spreadsheetId: _spreadsheetId,
-      serviceAccountJsonAssetPath: _serviceAccountAssetPath,
+    _loadingDialogKey = GlobalKey<CheckoutLoadingDialogState>();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return CheckoutLoadingDialog(
+          key: _loadingDialogKey,
+          onComplete: () {
+            Navigator.of(context).pop();
+            _navigateToAccountsTab(); 
+          },
+        );
+      },
     );
 
-    final existingOrders = await sheetsReader.readSheetAsMapList(
-      sheetName: 'orders',
-      range: 'A:Z',
-      firstRowIsHeader: true,
-    );
-
-    int nextCtr = 1;
-    if (existingOrders != null && existingOrders.isNotEmpty) {
-      final ctrValues = existingOrders
-          .where((row) => row.containsKey('ctr') && row['ctr'] != null)
-          .map((row) => int.tryParse(row['ctr'].toString()) ?? 0)
-          .toList();
-
-      if (ctrValues.isNotEmpty) {
-        nextCtr = ctrValues.reduce((a, b) => a > b ? a : b) + 1;
-      }
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    final userInfoString = prefs.getString('user_info');
-    Map<String, dynamic> userInfo = {};
-    if (userInfoString != null) {
-      try {
-        userInfo = jsonDecode(userInfoString);
-      } catch (e) {
-        print('⚠️ Failed to parse user_info: $e');
-      }
-    }
-
-    final customerId = userInfo['ctr'] ?? '';
     try {
-      await SheetsWriter.createSheetIfNotExists(
+      print('🔍 Debug Info:');
+      print('   Spreadsheet ID: $_spreadsheetId');
+      print('   Service Account Path: $_serviceAccountAssetPath');
+      print('   Cart items count: ${_cartItems.length}');
+
+      final DateTime now = DateTime.now();
+      
+      final String formattedDateTime =
+          '${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}/${now.year} '
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      
+      print('📅 Formatted DateTime: $formattedDateTime');
+      
+      final sheetsReader = SheetsReader();
+      await sheetsReader.initialize(
         spreadsheetId: _spreadsheetId,
         serviceAccountJsonAssetPath: _serviceAccountAssetPath,
-        sheetName: 'orders',
       );
-      print('✅ Sheet verification/creation completed');
+
+      final existingOrders = await sheetsReader.readSheetAsMapList(
+        sheetName: 'orders',
+        range: 'A:Z',
+        firstRowIsHeader: true,
+      );
+
+      int nextCtr = 1;
+      if (existingOrders != null && existingOrders.isNotEmpty) {
+        final ctrValues = existingOrders
+            .where((row) => row.containsKey('ctr') && row['ctr'] != null)
+            .map((row) => int.tryParse(row['ctr'].toString()) ?? 0)
+            .toList();
+
+        if (ctrValues.isNotEmpty) {
+          nextCtr = ctrValues.reduce((a, b) => a > b ? a : b) + 1;
+        }
+      }
+
+      // Get customer ID from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final userInfoString = prefs.getString('user_info');
+      String customerId = '';
+
+      if (userInfoString != null && userInfoString.isNotEmpty) {
+        try {
+          final userInfo = jsonDecode(userInfoString);
+          if (userInfo.containsKey('ctr') && userInfo['ctr'] != null) {
+            customerId = userInfo['ctr'].toString();
+          }
+        } catch (e) {
+          print('Error parsing user_info: $e');
+        }
+      }
+
+      print('Customer ID: "$customerId"');
+
+      try {
+        await SheetsWriter.createSheetIfNotExists(
+          spreadsheetId: _spreadsheetId,
+          serviceAccountJsonAssetPath: _serviceAccountAssetPath,
+          sheetName: 'orders',
+        );
+        print('✅ Sheet verification/creation completed');
+      } catch (e) {
+        print('⚠️ Sheet creation check failed: $e');
+      }
+
+      await Future.delayed(const Duration(seconds: 2));
+
+      for (int i = 0; i < _cartItems.length; i++) {
+        final CartItem cartItem = _cartItems[i];
+        if (cartItem.quantity <= 0) continue;
+
+        final List<Object?> rowValues = [
+          nextCtr++,
+          formattedDateTime,
+          cartItem.quantity,
+          cartItem.menuItem.id,
+          cartItem.menuItem.name,
+          customerId,
+          cartItem.menuItem.price,
+          cartItem.totalPrice,
+          0,
+        ];
+
+        print('📝 Inserting row ${i + 1}: $rowValues');
+
+        await SheetsWriter.appendRow(
+          spreadsheetId: _spreadsheetId,
+          serviceAccountJsonAssetPath: _serviceAccountAssetPath,
+          sheetName: 'orders',
+          rowValues: rowValues,
+        );
+
+        print('✅ Successfully inserted row ${i + 1}');
+      }
+      setState(() => _cartItems.clear());
+      widget.onCheckoutComplete?.call();
+      _loadingDialogKey?.currentState?.showSuccess();
+      
     } catch (e) {
-      print('⚠️ Sheet creation check failed: $e');
-    }
-
-    for (int i = 0; i < _cartItems.length; i++) {
-      final CartItem cartItem = _cartItems[i];
-      if (cartItem.quantity <= 0) continue;
-
-      final List<Object?> rowValues = [
-        nextCtr++, 
-        formattedDateTime,  
-        cartItem.quantity,  
-        cartItem.menuItem.id,
-        cartItem.menuItem.name,
-        customerId,  
-        cartItem.menuItem.price,
-        cartItem.totalPrice,
-      ];
-
-      print('📝 Inserting row ${i + 1}: $rowValues');
-
-      await SheetsWriter.appendRow(
-        spreadsheetId: _spreadsheetId,
-        serviceAccountJsonAssetPath: _serviceAccountAssetPath,
-        sheetName: 'orders',
-        rowValues: rowValues,
-      );
-
-      print('✅ Successfully inserted row ${i + 1}');
-    }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Order placed successfully!'),
-          backgroundColor: widget.theme.success,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-
-    setState(() => _cartItems.clear());
-    widget.onCheckoutComplete?.call();
-
-  } catch (e) {
-    print('❌ Checkout failed: $e');
-    print('Stack trace: ${StackTrace.current}');
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Checkout failed: ${e.toString()}'),
-          backgroundColor: widget.theme.error,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    }
-  } finally {
-    if (mounted) {
-      setState(() {
-        _isProcessingCheckout = false;
-      });
+      print('❌ Checkout failed: $e');
+      if (mounted) {
+        Navigator.of(context).pop();
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Checkout failed: ${e.toString()}'),
+            backgroundColor: widget.theme.error,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessingCheckout = false;
+        });
+      }
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -279,10 +311,13 @@ class _CartWidgetState extends State<CartWidget> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    onPressed: () =>
-                        _updateQuantity(index, cartItem.quantity - 1),
+                    onPressed: _isProcessingCheckout 
+                        ? null 
+                        : () => _updateQuantity(index, cartItem.quantity - 1),
                     icon: const Icon(Icons.remove),
-                    color: widget.theme.textSecondary,
+                    color: _isProcessingCheckout 
+                        ? widget.theme.textTertiary.withOpacity(0.3)
+                        : widget.theme.textSecondary,
                     constraints: const BoxConstraints(
                       minWidth: 32,
                       minHeight: 32,
@@ -307,10 +342,13 @@ class _CartWidgetState extends State<CartWidget> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () =>
-                        _updateQuantity(index, cartItem.quantity + 1),
+                    onPressed: _isProcessingCheckout 
+                        ? null 
+                        : () => _updateQuantity(index, cartItem.quantity + 1),
                     icon: const Icon(Icons.add),
-                    color: widget.theme.textSecondary,
+                    color: _isProcessingCheckout 
+                        ? widget.theme.textTertiary.withOpacity(0.3)
+                        : widget.theme.textSecondary,
                     constraints: const BoxConstraints(
                       minWidth: 32,
                       minHeight: 32,
@@ -360,25 +398,12 @@ class _CartWidgetState extends State<CartWidget> {
           style: ElevatedButton.styleFrom(
             backgroundColor: widget.theme.primary,
             padding: const EdgeInsets.symmetric(vertical: 16),
+            disabledBackgroundColor: widget.theme.primary.withOpacity(0.5),
           ),
-          child: _isProcessingCheckout
-              ? SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      widget.theme.surface,
-                    ),
-                  ),
-                )
-              : const Text(
-                  "Checkout",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+          child: const Text(
+            "Checkout",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     ),

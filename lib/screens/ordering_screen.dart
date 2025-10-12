@@ -34,6 +34,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
   AppColorPalette currentTheme = ThemeManager.applyTheme(0, false);
   int selectedThemeIndex = 0;
   int _currentIndex = 0;
+  bool hasOrderConfirmationNotification = false; // NEW: Track order confirmation
 
   @override
   void initState() {
@@ -160,6 +161,10 @@ class _OrderingScreenState extends State<OrderingScreen> {
   void _onTabSelected(int index) {
     setState(() {
       _currentIndex = index;
+      // Clear notification when navigating to accounts tab
+      if (index == 3) {
+        hasOrderConfirmationNotification = false;
+      }
     });
     _pageController.animateToPage(
       index,
@@ -203,11 +208,32 @@ class _OrderingScreenState extends State<OrderingScreen> {
     );
   }
 
+  // NEW: Build accounts icon with notification badge
+  Widget _accountsIcon({required bool active}) {
+    final icon = Icon(
+      active ? Icons.account_circle : Icons.account_circle_outlined,
+      color: active ? currentTheme.primary : null,
+    );
+
+    return Badge(
+      isLabelVisible: hasOrderConfirmationNotification,
+      alignment: Alignment.topRight,
+      offset: const Offset(6, -6),
+      backgroundColor: currentTheme.error,
+      label: const Icon(
+        Icons.priority_high,
+        size: 12,
+        color: Colors.white,
+      ),
+      child: icon,
+    );
+  }
+
   List<String> get _appBarTitles => [
     'Home',
     'Orders',
-    'Account',
     'Notifications',
+    'Account',
   ];
 
   @override
@@ -247,13 +273,17 @@ class _OrderingScreenState extends State<OrderingScreen> {
         onPageChanged: (index) {
           setState(() {
             _currentIndex = index;
+            // Clear notification when navigating to accounts tab
+            if (index == 3) {
+              hasOrderConfirmationNotification = false;
+            }
           });
         },
         children: [
           Padding(padding: const EdgeInsets.all(16.0), child: _buildMenuBody()),
           _buildOrdersTab(),
-          OrderHistoryScreen(theme: currentTheme),
           _buildNotificationsBody(),
+          OrderHistoryScreen(theme: currentTheme),
         ],
       ),
       bottomNavigationBar: Container(
@@ -295,20 +325,17 @@ class _OrderingScreenState extends State<OrderingScreen> {
               label: 'Orders',
             ),
             BottomNavigationBarItem(
-              icon: const Icon(Icons.account_circle_outlined),
-              activeIcon: Icon(
-                Icons.account_circle,
-                color: currentTheme.primary,
-              ),
-              label: 'Account',
-            ),
-            BottomNavigationBarItem(
               icon: const Icon(Icons.notifications_outlined),
               activeIcon: Icon(
                 Icons.notifications,
                 color: currentTheme.primary,
               ),
               label: 'Notifications',
+            ),
+            BottomNavigationBarItem(
+              icon: _accountsIcon(active: false),
+              activeIcon: _accountsIcon(active: true),
+              label: 'Account',
             ),
           ],
         ),
@@ -408,6 +435,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
         setState(() {
           cartItems.clear();
           addedItems.clear();
+          hasOrderConfirmationNotification = true; // NEW: Set notification flag
         });
       },
     );
